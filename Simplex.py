@@ -117,7 +117,9 @@ def choose_leaving(basic_var, rhs, coefficients):
         ratio = coefficients[basic_var[i]] / rhs[i]
         ratios.append(ratio)
     
-    return min(ratios)
+    value = min(ratios) 
+    ans = ratios.index(value)
+    return ans
     
 def simplex_manipulation(table):
     optimal_value = 0
