@@ -92,7 +92,28 @@ def algebraic_manipulation(obj,constraints,sign,rhs,choice):
     return table
 
 
-def Simplex(table):
+def Simplex(table,rhs):
+  #len(basic)=len(rhs)
+  #len(nonbasic)=len(cons[1])-len(rhs)
+
+
+  basic_variable=[]
+  non_basic_variable=[]
+  index=len(table[0])-(len(rhs)+1)
+  for i in range(index,len(table[0])):
+    basic_variable.append(i)
+  j=choose_entering(table[0])
+  l=choose_leaving(basic_variable,rhs,table[0])
+  if j==None:
+    print("The optimal value is:",table[0][-1])
+  t=table[l][j]
+  for k in range(len(table[l])):
+    table[l][k] = table[l][k] / t
+  for i in range(len(table)):
+    if i != l:
+      t1 = table[i][j]
+      for k in range(len(table[i])):
+            table[i][k] -=t1* table[l][k]
 
 def any_min(z_row):
     for i in range(len(z_row)):
