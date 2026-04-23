@@ -88,7 +88,7 @@ def algebraic_manipulation(obj,constraints,sign,rhs,choice):
          print("Invalid sign")
     print_objective(obj,choice)
     print_constraints(constraints,rhs,"=")
-    table=convert_to_matrix(obj,constraints,rhs)
+    table = convert_to_matrix(obj,constraints,rhs)
     return table
 
 
@@ -112,8 +112,8 @@ def Simplex(table):
 
 # def main():
 
-C,S,R,choice=get_input()
-K=C[1::]
+C, S, R, choice = get_input()
+K = C[1::]
 
 print_objective(C[0],choice)
 print_constraints(K,R,S)
