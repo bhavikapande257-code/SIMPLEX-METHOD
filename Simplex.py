@@ -41,14 +41,14 @@ def print_constraints(constraints, rhs, sign):
         for j in range(len(constraints[0])):
             print(f"{constraints[i][j]} x{j+1} ",end=" ")
 
-            if j != len(rhs) - 1:
+            if j != len(constraints[0]) - 1:
                 print(" + ", end="")
             else:
               if len(sign)==0:
                 print("=", end="")
               else:
                if i>=0 and i<len(R)+1:
-                print(sign[i-1] ,rhs[i-1])
+                print(sign[i-1] ,rhs[i])
 
 def algebraic_manipulation(obj,constraints,sign,rhs,choice):
 #    for i in range(len(sign)):
