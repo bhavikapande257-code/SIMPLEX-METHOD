@@ -95,36 +95,11 @@ def algebraic_manipulation(obj,constraints,sign,rhs,choice):
     return table
 
 
-def basic_variable(table,rhs):
-    basic_variable=[]
-    non_basic_variable=[]
-    index=len(table[0])-(len(rhs)+1)
-    for i in range(index,len(table[0])):
-     basic_variable.append(i)
-    return basic_variable
-
-def calculation(table,rhs,basic_variable):
-  #len(basic)=len(rhs)
-  #len(nonbasic)=len(cons[1])-len(rhs)
-
-
-
-  j=choose_entering(table[0])
-  l=choose_leaving(basic_variable,rhs,table[0])
-  if j==None:
-    return table[0][-1]
-  t=table[l][j]
-  for k in range(len(table[l])):
-    table[l][k] = table[l][k] / t
-  for i in range(len(table)):
-    if i != l:
-      t1 = table[i][j]
-      for k in range(len(table[i])):
-            table[i][k] -=t1* table[l][k]
+def Simplex(table):
 
 def any_min(z_row):
     for i in range(len(z_row)):
-        if int(z_row[i]) < 0:
+        if z_row[i] < 0:
             return 1
     return 0
 
@@ -149,14 +124,14 @@ def choose_leaving(basic_var, rhs, coefficients):
     ans = ratios.index(value)
     return ans
     
-def simplex_manipulation(table,rhs,basic_var,coefficients,z_row):
+def simplex_manipulation(table):
     optimal_value = 0
     if not any_min(z_row):
         return optimal_value
     else:
         entering_var = choose_entering(z_row)
         leaving_var = choose_leaving(basic_var, rhs, coefficients)
-        calculation(table,rhs,basic_variable)
+        calculation()
   #update optimal value
   #call itself(Send optimal value also)
   #declare the lists as global variables
@@ -174,10 +149,3 @@ print(table)
 # Simplex
 optimal_value = simplex_manipulation(table)
 print(f"Optimal value is:{optimal_value}")
-
-basic_var=basic_variable(table,R)
-
-# #Simplex
-optimal_value=simplex_manipulation(table,R,basic_var,C,C[0])
-print(f"Optimal value is:{optimal_value}")
-"""
