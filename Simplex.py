@@ -13,34 +13,70 @@ def get_input():
     #Getting the constraints
     for i in range(num_constraints):
         #Getting the constraints
-        user_input = input(f"Enter the coefficient for the {i}th constraint(list): ")
+        user_input = input(f"Enter the coefficient for the {i+1}th constraint(list): ")
         coefficients.append(user_input.split(" "))
 
         #Getting the signs
-        user_input_sign = input(f"Enter the sign for the {i}th constraint(list): ")
+        user_input_sign = input(f"Enter the sign for the {i+1}th constraint(list): ")
         signs.append(user_input_sign)
         #Getting the rhs
-        user_input_rhs = int(input(f"Enter the rhs for the {i}th constraint(list): "))
+        user_input_rhs = int(input(f"Enter the rhs for the {i+1}th constraint(list): "))
         rhs.append(user_input_rhs)
     return coefficients, signs, rhs, choice
 
+def print_objective(obj,choice):
+    print("\nObjective Function:")
+    print( choice,"Z = ", end="")
+    for i in range(len(obj)):
+        print(obj[i], end="")
+        print("x", end="")
+        print(i+1, end="")
+        if i != len(obj) - 1:
+            print(" + ", end="")
+    print()
 
-def printfn(C,S,R,choice):
-    print(choice,"\nZ =",end=" ")
-    for i in range(len(R)+1):
-        for j in range(len(C[0])):
-            print(f"{C[i][j]} x{j+1} ",end=" ")
-            if j!=len(R)-1:
-              print("+ ",end=" ")
+def print_constraints(constraints, rhs, sign):
+    print("\nConstraints:")
+    for i in range(len(rhs)):
+        for j in range(len(constraints[0])):
+            print(f"{constraints[i][j]} x{j+1} ",end=" ")
+
+            if j != len(rhs) - 1:
+                print(" + ", end="")
             else:
-              if i>0 and i<len(R)+1:
-               print(S[i-1] ,R[i-1])
+              if len(sign)==0:
+                print("=", end="")
+              else:
+               if i>=0 and i<len(R)+1:
+                print(sign[i-1] ,rhs[i-1])
 
+def algebraic_manipulation(obj,constraints,sign,rhs,choice):
+#    for i in range(len(sign)):
+    #    if sign[i]=="<=": #slack variable s1 coefficient=0
+    #        obj.append(0)
+    #    elif sign[i]=="=":#artificial variable along with the penalty
+    #        obj.append(100)
+    #    else:
+    #        obj.append(0)  
+    try:
+        
+        for i in range(len(sign)):
+            if sign[i]=="<"or "<=": #slack variable s1 coefficient=0
+                obj.append(0)
+                e = []
+                for j in range(len(sign)):
+                    if len(e) == i:
+                        e.append(1)
+                    else:
+                        e.append(0)
+                constraints[i].extend(e)
 
+ 
+    except:
+         print("Invalid sign")
+    print_objective(obj,choice)
+    print_constraints(constraints,rhs,"=") 
 
-        print("\n")
-        if i==0:
-            print("SUBJECT TO")
 # def simplex_manipulation(table):
   #if Max or min of z row> or < 0
   #then stop iteration and return optimal value
@@ -55,10 +91,13 @@ def printfn(C,S,R,choice):
 # def main():
 
 C,S,R,choice=get_input()
-printfn(C,S,R,choice)
-  # algebraic_manipulation()
-  # table=convert_to_matrix()
-  # #Simplex
-  # optimal_value=simplex_manipulation(table)
-  # print(f"Optimal value is:{optimal_value}")
+K=C[1::]
+
+print_objective(C[0],choice)
+print_constraints(K,R,S)
+algebraic_manipulation(C[0],K, S, R, choice)
+# table=convert_to_matrix()
+# #Simplex
+# optimal_value=simplex_manipulation(table)
+# print(f"Optimal value is:{optimal_value}")
 
