@@ -50,6 +50,18 @@ def print_constraints(constraints, rhs, sign):
                if i>=0 and i<len(R)+1:
                 print(sign[i-1] ,rhs[i])
 
+def convert_to_matrix(obj,constraints, rhs):
+  zrow=[]
+  table=[]
+  for i in range(len(obj)):
+    y=int(obj[i])
+    zrow.append(y*(-1))
+  constraints.insert(0,zrow)
+  table=constraints.copy()
+  return table
+
+
+
 def algebraic_manipulation(obj,constraints,sign,rhs,choice):
 #    for i in range(len(sign)):
     #    if sign[i]=="<=": #slack variable s1 coefficient=0
@@ -57,9 +69,9 @@ def algebraic_manipulation(obj,constraints,sign,rhs,choice):
     #    elif sign[i]=="=":#artificial variable along with the penalty
     #        obj.append(100)
     #    else:
-    #        obj.append(0)  
+    #        obj.append(0)
     try:
-        
+
         for i in range(len(sign)):
             if sign[i]=="<"or "<=": #slack variable s1 coefficient=0
                 obj.append(0)
@@ -71,11 +83,21 @@ def algebraic_manipulation(obj,constraints,sign,rhs,choice):
                         e.append(0)
                 constraints[i].extend(e)
 
- 
+
     except:
          print("Invalid sign")
     print_objective(obj,choice)
-    print_constraints(constraints,rhs,"=") 
+    print_constraints(constraints,rhs,"=")
+    table=convert_to_matrix(obj,constraints,rhs)
+    return table
+
+
+def Simplex(table):
+
+
+
+
+
 
 # def simplex_manipulation(table):
   #if Max or min of z row> or < 0
@@ -95,7 +117,8 @@ K=C[1::]
 
 print_objective(C[0],choice)
 print_constraints(K,R,S)
-algebraic_manipulation(C[0],K, S, R, choice)
+table=algebraic_manipulation(C[0],K, S, R, choice)
+print(table)
 # table=convert_to_matrix()
 # #Simplex
 # optimal_value=simplex_manipulation(table)
