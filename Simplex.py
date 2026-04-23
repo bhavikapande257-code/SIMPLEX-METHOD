@@ -94,18 +94,39 @@ def algebraic_manipulation(obj,constraints,sign,rhs,choice):
 
 def Simplex(table):
 
+def any_min(z_row):
+    for i in range(len(z_row)):
+        if z_row[i] < 0:
+            return 1
+    return 0
 
+def choose_entering(z_row):
+    neg_coeff = []
+    for i in range(len(z_row)):
+        if z_row[i] < 0:
+            neg_coeff.append(z_row[i])
+    
+    if len(neg_coeff) != 0:
+        return min(neg_coeff)
+    else:
+        return None
 
-
-
-
-# def simplex_manipulation(table):
-  #if Max or min of z row> or < 0
-  #then stop iteration and return optimal value
-  #else
-  #choose_entering()
-  #choose_leaving()
-  #calculation
+def choose_leaving(basic_var, rhs, coefficients):
+    ratios = []
+    for i in range(len(basic_var)):
+        ratio = coefficients[basic_var[i]] / rhs[i]
+        ratios.append(ratio)
+    
+    return min(ratios)
+    
+def simplex_manipulation(table):
+    optimal_value = 0
+    if not any_min(z_row):
+        return optimal_value
+    else:
+        entering_var = choose_entering(z_row)
+        leaving_var = choose_leaving(basic_var, rhs, coefficients)
+        calculation()
   #update optimal value
   #call itself(Send optimal value also)
   #declare the lists as global variables
