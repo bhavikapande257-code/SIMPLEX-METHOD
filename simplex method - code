@@ -1,373 +1,250 @@
 """
-SIMPLEX METHOD STEP-BY-STEP TUTOR
-Supports:
-  - Standard (<= only)         : simple slack-variable simplex
-  - Mixed / equality constraints: Big-M method OR Two-Phase method (user chooses)
-Special case detection:
-  - Alternate (multiple) optimal solutions
-  - Unbounded problem
-  - Infeasible problem
-  - Degenerate solution
-
-FIXES APPLIED:
-  1. print_explanation "optimal" phase: removed abs(), now correctly negates
-     Z-row RHS for maximization (stored as -Z*) and keeps as-is for minimization.
-  2. run_two_phase Phase 1 infeasible branch: added missing choice= parameter.
-  3. run_two_phase Phase 2 optimal call: ensured choice= is passed correctly.
-  4. build_phase2_tableau: fixed Z-row elimination to use correct row indexing
-     via enumerated basics rather than assuming positional order.
+Simplex Method Solver
+Supports: Big-M method and Two-Phase method
+Handles: maximization and minimization, <=, =, >= constraints
+All arithmetic displayed in fractions.
 """
 
-BIG_M   = 1_000_000
-EPSILON = 1e-9
+from fractions import Fraction
+import sys
+
+BIG_M = Fraction(10**6)   # Large-M penalty (exact fraction)
+EPSILON = Fraction(1, 10**9)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# INPUT
-# ─────────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────
+# I/O helpers  (with repeated-input on bad data – Fix 3)
+# ──────────────────────────────────────────────────────────────
 
-def get_input():
-    print("=" * 65)
-    print("         SIMPLEX METHOD STEP-BY-STEP TUTOR")
-    print("=" * 65)
-
-    choice = input("\nMaximization or Minimization? (max/min): ").strip().lower()
-    while choice not in ("max", "min"):
-        choice = input("  Please enter 'max' or 'min': ").strip().lower()
-
-    num_variables   = int(input("Enter number of decision variables : "))
-    num_constraints = int(input("Enter number of constraints        : "))
-
-    coefficients, signs, rhs = [], [], []
-
-    print("\nEnter objective function coefficients (space-separated):")
-    obj_input = input("  e.g. 5x1 + 4x2  -->  5 4 : ").split()
-    coefficients.append([float(x) for x in obj_input])
-
-    print("\nEnter each constraint:")
-    for i in range(num_constraints):
-        print(f"\n  Constraint {i + 1}:")
-        con_input = input("    Coefficients (space-separated): ").split()
-        coefficients.append([float(x) for x in con_input])
-        sign = input("    Sign  (<=  /  >=  /  =) : ").strip()
-        while sign not in ("<=", ">=", "="):
-            sign = input("    Please enter <=, >= or = : ").strip()
-        signs.append(sign)
-        rhs_val = float(input("    RHS value               : "))
-        rhs.append(rhs_val)
-
-    return coefficients, signs, rhs, choice
+def input_int(prompt):
+    """Prompt until the user enters a valid integer."""
+    while True:
+        try:
+            return int(input(prompt).strip())
+        except ValueError:
+            print("  [Error] Please enter a whole number.")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# HELPERS
-# ─────────────────────────────────────────────────────────────────────────────
+def input_fraction(prompt):
+    """Prompt until the user enters a valid number (returned as Fraction)."""
+    while True:
+        try:
+            raw = input(prompt).strip()
+            # Accept fractions like "3/4" or decimals like "1.5"
+            if '/' in raw:
+                num, den = raw.split('/')
+                return Fraction(int(num.strip()), int(den.strip()))
+            return Fraction(raw)
+        except (ValueError, ZeroDivisionError):
+            print("  [Error] Please enter a valid number (e.g. 3, -2, 1/4, 0.5).")
 
-def fmt(val):
-    if abs(val) >= BIG_M / 2:
-        return "M" if val > 0 else "-M"
-    r = round(val, 4)
-    return str(int(r)) if r == int(r) else f"{r:.3f}"
+
+def input_choice(prompt, valid):
+    """Prompt until user picks one of the valid options (case-insensitive)."""
+    while True:
+        ans = input(prompt).strip().lower()
+        if ans in [v.lower() for v in valid]:
+            return ans
+        print(f"  [Error] Choose one of: {valid}")
 
 
-def sep(n=65):
-    print("-" * n)
+def input_sign(prompt):
+    """Prompt until user enters <=, =, or >= (strictly – Fix 4)."""
+    while True:
+        s = input(prompt).strip()
+        if s in ("<=", "=", ">="):
+            return s
+        # Fix 4: reject strict inequalities and explain why
+        if s in ("<", ">"):
+            print("  [Error] Strict inequalities (< or >) are not supported in linear "
+                  "programming — the optimal value cannot be determined because the "
+                  "feasible region is open and the bound is never actually achieved.")
+        else:
+            print("  [Error] Please enter <=, =, or >=.")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# TABLEAU PRINTER
-# ─────────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────
+# Fraction display helpers
+# ──────────────────────────────────────────────────────────────
 
-def print_tableau(tableau, basics, col_names, pivot_col=-1, pivot_row=-1):
+def fmt(f):
+    """Format a Fraction for display (no trailing /1)."""
+    f = Fraction(f)
+    if f.denominator == 1:
+        return str(f.numerator)
+    return f"{f.numerator}/{f.denominator}"
+
+
+def fmt_row(row, width=10):
+    return "  ".join(fmt(v).rjust(width) for v in row)
+
+
+# ──────────────────────────────────────────────────────────────
+# Tableau printing  (with Ratio column – Fix 1)
+# ──────────────────────────────────────────────────────────────
+
+def print_tableau(tableau, basics, col_names, pivot_col=None, show_ratio=False):
     """
-    Pivot element  : [val]
-    Pivot column   : (val)
-    Pivot row      : val*
+    Print the simplex tableau.
+    If show_ratio=True (and pivot_col is set), append a Ratio column
+    showing RHS / pivot-column coefficient for each constraint row.
     """
-    cw = 10
-    print(f"{'BV':>{cw}}", end="")
-    for n in col_names:
-        print(f"{n:>{cw}}", end="")
-    print()
-    print("-" * cw * (len(col_names) + 1))
+    col_w = 10
+    header_names = ["Basis"] + col_names
+    if show_ratio:
+        header_names += ["Ratio"]
 
-    for ri, row in enumerate(tableau):
-        bv = "Z" if ri == 0 else col_names[basics[ri - 1]]
-        print(f"{bv:>{cw}}", end="")
+    # Header
+    print("  " + "  ".join(n.rjust(col_w) for n in header_names))
+    print("  " + "-" * (col_w * len(header_names) + 2 * (len(header_names) - 1)))
 
-        for ci, val in enumerate(row):
-            cell = fmt(val)
-            if ri == pivot_row and ci == pivot_col:
-                cell = f"[{cell}]"
-            elif ci == pivot_col and ri != 0 and ri != pivot_row:
-                cell = f"({cell})"
-            elif ri == pivot_row and ci != pivot_col:
-                cell = f"{cell}*"
-            print(f"{cell:>{cw}}", end="")
-        print()
-    print()
+    for r, row in enumerate(tableau):
+        if r == 0:
+            basis_label = "Z"
+        else:
+            basis_label = col_names[basics[r - 1]] if basics[r - 1] < len(col_names) else "?"
 
+        cells = [basis_label.rjust(col_w)]
+        for v in row:
+            cells.append(fmt(Fraction(v)).rjust(col_w))
 
-# ─────────────────────────────────────────────────────────────────────────────
-# SIMPLEX CORE OPERATIONS
-# ─────────────────────────────────────────────────────────────────────────────
-
-def find_pivot_col(z_row):
-    most_neg, idx = -EPSILON, -1
-    for j in range(len(z_row) - 1):
-        if z_row[j] < most_neg:
-            most_neg, idx = z_row[j], j
-    return idx
-
-
-def find_pivot_row(tableau, pivot_col):
-    ratios = []
-    for i in range(1, len(tableau)):
-        val = tableau[i][pivot_col]
-        rhs = tableau[i][-1]
-        ratios.append((rhs / val if val > EPSILON else float("inf"), i))
-    if all(r == float("inf") for r, _ in ratios):
-        return -1, ratios
-    min_ratio, min_row = min(ratios, key=lambda x: x[0])
-    return min_row, ratios
-
-
-def do_pivot(tableau, pivot_row, pivot_col):
-    t  = [row[:] for row in tableau]
-    pv = t[pivot_row][pivot_col]
-    t[pivot_row] = [v / pv for v in t[pivot_row]]
-    for i in range(len(t)):
-        if i != pivot_row:
-            f = t[i][pivot_col]
-            t[i] = [t[i][j] - f * t[pivot_row][j] for j in range(len(t[i]))]
-    return t
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# SPECIAL-CASE DETECTION
-# ─────────────────────────────────────────────────────────────────────────────
-
-def detect_special_cases(tableau, basics, col_names, num_vars):
-    """
-    Called when the Z-row is fully non-negative (optimal tableau reached).
-    Returns a list of human-readable strings for each detected special case.
-    """
-    cases = []
-    n_rows = len(tableau)
-
-    # ── 1. DEGENERATE ────────────────────────────────────────────────────────
-    for i in range(1, n_rows):
-        if abs(tableau[i][-1]) < EPSILON:
-            cases.append(
-                f"DEGENERATE SOLUTION — basic variable "
-                f"{col_names[basics[i - 1]]} = 0 in row {i}. "
-                f"The BFS is degenerate; the simplex method may cycle."
-            )
-
-    # ── 2. ALTERNATE OPTIMAL ─────────────────────────────────────────────────
-    basic_set = set(basics)
-    for j in range(num_vars):
-        if j not in basic_set and abs(tableau[0][j]) < EPSILON:
-            cases.append(
-                f"ALTERNATE OPTIMAL SOLUTION — non-basic variable "
-                f"{col_names[j]} has zero Z-row coefficient. "
-                f"Pivoting on {col_names[j]} yields another optimal BFS "
-                f"with the same Z* value. Infinitely many optimal solutions exist."
-            )
-
-    # ── 3. INFEASIBLE (Big-M) ────────────────────────────────────────────────
-    for i in range(1, n_rows):
-        bv = col_names[basics[i - 1]]
-        if bv.startswith("a") and tableau[i][-1] > EPSILON:
-            cases.append(
-                f"INFEASIBLE — artificial variable {bv} is still in the basis "
-                f"with value {fmt(tableau[i][-1])} > 0. "
-                f"The original constraints are contradictory; no feasible solution exists."
-            )
-
-    return cases
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# EXPLANATION PRINTER
-# ─────────────────────────────────────────────────────────────────────────────
-
-def print_explanation(phase, tableau, basics, col_names,
-                      pivot_col=-1, pivot_row=-1, ratios=None,
-                      iteration=0, choice="max", num_vars=2,
-                      method="", special_cases=None):
-    sep()
-
-    if phase == "initial":
-        neg = [(col_names[j], fmt(tableau[0][j]))
-               for j in range(len(tableau[0]) - 1)
-               if tableau[0][j] < -EPSILON]
-        print(f"STEP 0 — Initial Tableau  [{method}]")
-        sep()
-        slack_names = [col_names[i] for i in range(num_vars, len(col_names) - 1)
-                       if col_names[i].startswith("s")]
-        art_names   = [col_names[i] for i in range(num_vars, len(col_names) - 1)
-                       if col_names[i].startswith("a")]
-        if slack_names:
-            print(f"  Slack/surplus variables added : {', '.join(slack_names)}")
-        if art_names:
-            print(f"  Artificial variables added    : {', '.join(art_names)}")
-            if method == "Big-M":
-                print(f"  Each artificial penalised with M = {BIG_M:,} in Z-row.")
-            elif method == "Phase 1":
-                print(f"  Phase 1 objective: minimise w = sum of artificial variables.")
-        print(f"  Starting Z = {fmt(tableau[0][-1])}")
-        if neg:
-            print(f"  Negative Z-row coefficients: "
-                  + ", ".join(f"{n}({v})" for n, v in neg))
-        print(f"\n  NEXT: Select the most negative Z-row coefficient "
-              f"as the entering variable (largest improvement to Z).")
-
-    elif phase == "pivot":
-        entering = col_names[pivot_col]
-        leaving  = col_names[basics[pivot_row - 1]]
-        pv       = fmt(tableau[pivot_row][pivot_col])
-        z_coef   = fmt(tableau[0][pivot_col])
-        neg      = [(col_names[j], fmt(tableau[0][j]))
-                    for j in range(len(tableau[0]) - 1)
-                    if tableau[0][j] < -EPSILON]
-
-        print(f"ITERATION {iteration} — Pivot Step  [{method}]")
-        sep()
-        print(f"  Negative Z-row: " + ", ".join(f"{n}({v})" for n, v in neg))
-
-        print(f"\n  ENTERING VARIABLE : {entering}")
-        print(f"    Most negative Z-row coefficient = {z_coef}.")
-        print(f"    Bringing {entering} into the basis improves Z the most.")
-
-        print(f"\n  MINIMUM RATIO TEST  (RHS / pivot-column value):")
-        min_r = min(r for r, _ in ratios if r != float("inf"))
-        for ratio_val, row_idx in ratios:
-            bv      = col_names[basics[row_idx - 1]]
-            col_val = fmt(tableau[row_idx][pivot_col])
-            rhs_val = fmt(tableau[row_idx][-1])
-            if ratio_val == float("inf"):
-                print(f"    Row {bv:<5}: {rhs_val} / {col_val} = N/A  (skip)")
+        # Fix 1 – Ratio column
+        if show_ratio and r > 0 and pivot_col is not None:
+            denom = Fraction(row[pivot_col])
+            rhs   = Fraction(row[-1])
+            if denom > EPSILON:
+                ratio_str = fmt(rhs / denom)
             else:
-                marker = "  <-- MINIMUM (leaving)" if abs(ratio_val - min_r) < EPSILON else ""
-                print(f"    Row {bv:<5}: {rhs_val} / {col_val} = {fmt(ratio_val)}{marker}")
+                ratio_str = "---"    # non-positive pivot element → skip
+            cells.append(ratio_str.rjust(col_w))
 
-        print(f"\n  LEAVING VARIABLE  : {leaving}")
-        print(f"    Smallest non-negative ratio = {fmt(min_r)}")
-        print(f"\n  PIVOT ELEMENT     : [{pv}]  (row {leaving}, col {entering})")
-        print(f"    Step 1 — Divide row {leaving} by {pv}")
-        print(f"    Step 2 — Eliminate {entering} from all other rows")
-        print(f"\n  NEXT: {entering} enters the basis, {leaving} leaves.")
-
-        if abs(min_r) < EPSILON:
-            print(f"\n  *** DEGENERATE PIVOT — ratio = 0. "
-                  f"Z will not change this iteration.")
-
-    elif phase == "optimal":
-        # FIX 1: For maximization, the tableau stores -Z* in the RHS of row 0.
-        # We must negate it to get the true Z* value.
-        # For minimization, the tableau stores Z* directly — no negation needed.
-        raw   = round(tableau[0][-1], 6)
-        z_val = -raw if choice == "max" else raw
-
-        sol = []
-        for i in range(num_vars):
-            br  = basics.index(i) if i in basics else -1
-            val = tableau[br + 1][-1] if br >= 0 else 0.0
-            sol.append(f"{col_names[i]} = {fmt(val)}")
-        print("OPTIMAL SOLUTION FOUND")
-        sep()
-        print("  All Z-row coefficients >= 0.  No further improvement possible.")
-        print(f"\n  Optimal Z* = {fmt(z_val)}")
-        print(f"  Solution  : {',  '.join(sol)}")
-        if special_cases:
-            print()
-            for sc in special_cases:
-                print(f"  *** {sc}")
-
-    elif phase == "unbounded":
-        entering = col_names[pivot_col]
-        print("PROBLEM IS UNBOUNDED")
-        sep()
-        print(f"  Entering variable {entering} has no positive column coefficients.")
-        print(f"  Ratio test cannot select a leaving variable.")
-        print(f"  Z can grow without bound — no finite optimal solution exists.")
-
-    elif phase == "infeasible":
-        print("PROBLEM IS INFEASIBLE")
-        sep()
-        print("  The Phase 1 objective w > 0 at termination.")
-        print("  The constraints cannot all be satisfied simultaneously.")
-        print("  No feasible solution exists for this problem.")
-
-    elif phase == "phase2_start":
-        print("PHASE 1 COMPLETE — Starting Phase 2")
-        sep()
-        print("  All artificial variables are 0 (or removed from basis).")
-        print("  A basic feasible solution to the original problem was found.")
-        print("  Phase 2: now optimise the original objective Z.")
-
-    sep()
+        print("  " + "  ".join(cells))
+    print()
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# BIG-M METHOD
-# ─────────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────
+# Pivot
+# ──────────────────────────────────────────────────────────────
 
-def build_bigM_tableau(obj, constraints, signs, rhs, choice, num_vars, num_cons):
-    direction  = -1 if choice == "max" else 1
-    extra_names, slack_map, art_cols = [], {}, []
+def pivot(tableau, pivot_row, pivot_col):
+    """Perform one pivot operation (all arithmetic in Fraction)."""
+    tableau = [[Fraction(v) for v in row] for row in tableau]
+    pv = tableau[pivot_row][pivot_col]
+    tableau[pivot_row] = [v / pv for v in tableau[pivot_row]]
+    for r in range(len(tableau)):
+        if r != pivot_row:
+            factor = tableau[r][pivot_col]
+            tableau[r] = [tableau[r][j] - factor * tableau[pivot_row][j]
+                          for j in range(len(tableau[r]))]
+    return tableau
 
-    base = num_vars
-    for i, s in enumerate(signs):
-        if s == "<=":
-            extra_names.append(f"s{i+1}")
-            slack_map[i] = (base, "slack");   base += 1
-        elif s == ">=":
-            extra_names.append(f"s{i+1}")
-            slack_map[i] = (base, "surplus"); base += 1
+
+# ──────────────────────────────────────────────────────────────
+# Bland's-rule / most-negative pivot selection
+# ──────────────────────────────────────────────────────────────
+
+def choose_pivot_col(z_row, num_cols):
+    """Return index of most-negative coefficient in z-row (ignoring RHS)."""
+    best, best_val = -1, Fraction(0)
+    for j in range(num_cols - 1):          # exclude RHS
+        if Fraction(z_row[j]) < best_val - EPSILON:
+            best, best_val = j, Fraction(z_row[j])
+    return best
+
+
+def choose_pivot_row(tableau, col, show_ratio=False, col_names=None, basics=None):
+    """
+    Minimum-ratio test.  Returns pivot row index (1-based in tableau),
+    or -1 if unbounded.
+    Also prints the ratio column when show_ratio=True (Fix 1).
+    """
+    min_ratio, best_row = None, -1
+    for r in range(1, len(tableau)):
+        denom = Fraction(tableau[r][col])
+        rhs   = Fraction(tableau[r][-1])
+        if denom > EPSILON:
+            ratio = rhs / denom
+            if min_ratio is None or ratio < min_ratio:
+                min_ratio, best_row = ratio, r
+    return best_row
+
+
+# ──────────────────────────────────────────────────────────────
+# Build Big-M tableau
+# ──────────────────────────────────────────────────────────────
+
+def build_bigM_tableau(obj, constraints, signs, rhs, choice, num_vars, num_cons,
+                       unrestricted_vars=None):
+    """
+    Build the Big-M tableau.
+    unrestricted_vars: set of 0-based variable indices that are unrestricted
+                       (each split into x_i+ – x_i-; handled upstream).
+    """
+    direction = Fraction(-1) if choice == "max" else Fraction(1)
+
+    slack_map = {}   # constraint_index -> (col_index, "slack"/"surplus")
+    art_cols  = []   # list of (constraint_index, col_index)
+    extra_names = []
+
+    col_ptr = num_vars
+    for i, sign in enumerate(signs):
+        if sign == "<=":
+            slack_map[i] = (col_ptr, "slack")
+            extra_names.append(f"s{i+1}")        # Fix 5 label
+            col_ptr += 1
+        elif sign == ">=":
+            slack_map[i] = (col_ptr, "surplus")
+            extra_names.append(f"e{i+1}")        # Fix 5 surplus label
+            col_ptr += 1
+            art_cols.append((i, col_ptr))
             extra_names.append(f"a{i+1}")
-            art_cols.append((i, base));       base += 1
-        elif s == "=":
+            col_ptr += 1
+        elif sign == "=":
+            art_cols.append((i, col_ptr))
             extra_names.append(f"a{i+1}")
-            art_cols.append((i, base));       base += 1
+            col_ptr += 1
 
-    total_cols = base + 1
+    total_cols = col_ptr + 1
     col_names  = [f"x{i+1}" for i in range(num_vars)] + extra_names + ["RHS"]
 
-    # +M penalty for each artificial in the Z-row (maximization stores negated
-    # objective, so +M is correct in both max and min to penalise artificials).
-    z_row = [direction * c for c in obj] + [0.0] * len(extra_names) + [0.0]
-    for _, col_idx in art_cols:
-        z_row[col_idx] = BIG_M
+    # Print which variables were added and why (Fix 5)
+    for i, sign in enumerate(signs):
+        if sign == "<=":
+            print(f"  Constraint {i+1} (<=): slack variable s{i+1} added.")
+        elif sign == ">=":
+            print(f"  Constraint {i+1} (>=): surplus variable e{i+1} added, "
+                  f"artificial variable a{i+1} added.")
+        elif sign == "=":
+            print(f"  Constraint {i+1} (=): artificial variable a{i+1} added.")
 
-    # Build constraint rows and track which tableau row each artificial lives in.
-    # art_row_map: col_index_of_artificial -> tableau_row_index (1-based)
+    z_row = [direction * Fraction(c) for c in obj] \
+            + [Fraction(0)] * len(extra_names) + [Fraction(0)]
+    for _, col_idx in art_cols:
+        z_row[col_idx] = BIG_M   # +M penalty regardless of direction
+
     tableau, basics = [z_row], []
     art_row_map = {}
     for i in range(num_cons):
-        row = list(constraints[i]) + [0.0] * len(extra_names) + [rhs[i]]
+        row = [Fraction(v) for v in constraints[i]] \
+              + [Fraction(0)] * len(extra_names) + [Fraction(rhs[i])]
         if i in slack_map:
-            col_idx, kind = slack_map[i]
-            row[col_idx] = 1.0 if kind == "slack" else -1.0
+            cidx, stype = slack_map[i]
+            row[cidx] = Fraction(1) if stype == "slack" else Fraction(-1)
         for ci, col_idx in art_cols:
             if ci == i:
-                row[col_idx] = 1.0
-                art_row_map[col_idx] = len(tableau)   # row about to be appended
+                row[col_idx] = Fraction(1)
+                art_row_map[col_idx] = len(tableau)
         bv = (slack_map[i][0] if (i in slack_map and slack_map[i][1] == "slack")
               else next(c for (ci, c) in art_cols if ci == i))
         basics.append(bv)
         tableau.append(row)
 
-    # Eliminate artificials from Z-row (canonical form).
-    # Collect ALL (factor, tableau_row) pairs FIRST from the original Z-row,
-    # then apply them — so no single elimination corrupts the next factor read.
+    # Eliminate artificials from Z-row (canonical form)
     eliminations = []
     for _, col_idx in art_cols:
-        factor = tableau[0][col_idx]           # always BIG_M at this point
+        factor = tableau[0][col_idx]
         if abs(factor) > EPSILON:
             eliminations.append((factor, art_row_map[col_idx]))
-
     for factor, row_idx in eliminations:
         for j in range(total_cols):
             tableau[0][j] -= factor * tableau[row_idx][j]
@@ -375,113 +252,74 @@ def build_bigM_tableau(obj, constraints, signs, rhs, choice, num_vars, num_cons)
     return tableau, basics, col_names
 
 
-def run_bigM(obj, constraints, signs, rhs, choice, num_vars, num_cons):
-    tableau, basics, col_names = build_bigM_tableau(
-        obj, constraints, signs, rhs, choice, num_vars, num_cons)
-
-    print("\n" + "=" * 65)
-    print_explanation("initial", tableau, basics, col_names,
-                      num_vars=num_vars, method="Big-M", choice=choice)
-    print()
-    print_tableau(tableau, basics, col_names)
-    input("  Press ENTER for next step...")
-
-    for iteration in range(1, 100):
-        pc = find_pivot_col(tableau[0])
-        if pc == -1:
-            sc = detect_special_cases(tableau, basics, col_names, num_vars)
-            infeasible = any("INFEASIBLE" in s for s in sc)
-            print("\n" + "=" * 65)
-            if infeasible:
-                print_explanation("infeasible", tableau, basics, col_names,
-                                  choice=choice)
-            else:
-                print_explanation("optimal", tableau, basics, col_names,
-                                  num_vars=num_vars, choice=choice,
-                                  special_cases=sc)
-            print()
-            print_tableau(tableau, basics, col_names)
-            return
-
-        pr, ratios = find_pivot_row(tableau, pc)
-        if pr == -1:
-            print("\n" + "=" * 65)
-            print_explanation("unbounded", tableau, basics, col_names,
-                              pivot_col=pc, choice=choice)
-            return
-
-        print("\n" + "=" * 65)
-        print_explanation("pivot", tableau, basics, col_names,
-                          pivot_col=pc, pivot_row=pr, ratios=ratios,
-                          iteration=iteration, choice=choice,
-                          num_vars=num_vars, method="Big-M")
-        print()
-        print("  Tableau BEFORE  ( [ ] = pivot element | ( ) = pivot col | * = pivot row )")
-        print()
-        print_tableau(tableau, basics, col_names, pivot_col=pc, pivot_row=pr)
-        tableau = do_pivot(tableau, pr, pc)
-        basics[pr - 1] = pc
-        print("  Tableau AFTER pivot:")
-        print()
-        print_tableau(tableau, basics, col_names)
-        input("  Press ENTER for next step...")
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# TWO-PHASE METHOD
-# ─────────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────
+# Build Phase-1 tableau
+# ──────────────────────────────────────────────────────────────
 
 def build_phase1_tableau(obj, constraints, signs, rhs, num_vars, num_cons):
-    extra_names, slack_map, art_cols = [], {}, []
+    slack_map = {}
+    art_cols  = []
+    extra_names = []
 
-    base = num_vars
-    for i, s in enumerate(signs):
-        if s == "<=":
+    col_ptr = num_vars
+    for i, sign in enumerate(signs):
+        if sign == "<=":
+            slack_map[i] = (col_ptr, "slack")
             extra_names.append(f"s{i+1}")
-            slack_map[i] = (base, "slack");   base += 1
-        elif s == ">=":
-            extra_names.append(f"s{i+1}")
-            slack_map[i] = (base, "surplus"); base += 1
+            col_ptr += 1
+        elif sign == ">=":
+            slack_map[i] = (col_ptr, "surplus")
+            extra_names.append(f"e{i+1}")
+            col_ptr += 1
+            art_cols.append((i, col_ptr))
             extra_names.append(f"a{i+1}")
-            art_cols.append((i, base));       base += 1
-        elif s == "=":
+            col_ptr += 1
+        elif sign == "=":
+            art_cols.append((i, col_ptr))
             extra_names.append(f"a{i+1}")
-            art_cols.append((i, base));       base += 1
+            col_ptr += 1
 
-    total_cols = base + 1
+    # Print added variables (Fix 5)
+    for i, sign in enumerate(signs):
+        if sign == "<=":
+            print(f"  Constraint {i+1} (<=): slack variable s{i+1} added.")
+        elif sign == ">=":
+            print(f"  Constraint {i+1} (>=): surplus variable e{i+1} added, "
+                  f"artificial variable a{i+1} added.")
+        elif sign == "=":
+            print(f"  Constraint {i+1} (=): artificial variable a{i+1} added.")
+
+    total_cols = col_ptr + 1
     col_names  = [f"x{i+1}" for i in range(num_vars)] + extra_names + ["RHS"]
 
-    z_row = [0.0] * total_cols
+    # Phase-1 objective: minimise sum of artificials (w-row)
+    z_row = [Fraction(0)] * total_cols
     for _, col_idx in art_cols:
-        z_row[col_idx] = 1.0   # minimise sum of artificials
+        z_row[col_idx] = Fraction(1)
 
-    # Build constraint rows and track which tableau row each artificial lives in.
-    # art_row_map: col_index_of_artificial -> tableau_row_index (1-based)
     tableau, basics = [z_row], []
     art_row_map = {}
     for i in range(num_cons):
-        row = list(constraints[i]) + [0.0] * len(extra_names) + [rhs[i]]
+        row = [Fraction(v) for v in constraints[i]] \
+              + [Fraction(0)] * len(extra_names) + [Fraction(rhs[i])]
         if i in slack_map:
-            col_idx, kind = slack_map[i]
-            row[col_idx] = 1.0 if kind == "slack" else -1.0
+            cidx, stype = slack_map[i]
+            row[cidx] = Fraction(1) if stype == "slack" else Fraction(-1)
         for ci, col_idx in art_cols:
             if ci == i:
-                row[col_idx] = 1.0
-                art_row_map[col_idx] = len(tableau)   # row about to be appended
+                row[col_idx] = Fraction(1)
+                art_row_map[col_idx] = len(tableau)
         bv = (slack_map[i][0] if (i in slack_map and slack_map[i][1] == "slack")
               else next(c for (ci, c) in art_cols if ci == i))
         basics.append(bv)
         tableau.append(row)
 
-    # Eliminate artificials from w-row (canonical form).
-    # Collect ALL (factor, tableau_row) pairs FIRST from the original w-row,
-    # then apply them — so no single elimination corrupts the next factor read.
+    # Canonical form for w-row
     eliminations = []
     for _, col_idx in art_cols:
-        factor = tableau[0][col_idx]           # always 1.0 at this point
+        factor = tableau[0][col_idx]
         if abs(factor) > EPSILON:
             eliminations.append((factor, art_row_map[col_idx]))
-
     for factor, row_idx in eliminations:
         for j in range(total_cols):
             tableau[0][j] -= factor * tableau[row_idx][j]
@@ -489,29 +327,38 @@ def build_phase1_tableau(obj, constraints, signs, rhs, num_vars, num_cons):
     return tableau, basics, col_names, art_cols
 
 
-def build_phase2_tableau(tab_p1, basics_p1, col_names_p1, obj, choice, num_vars, art_cols):
-    art_idx   = {col_idx for _, col_idx in art_cols}
-    keep      = [j for j in range(len(col_names_p1)) if j not in art_idx]
-    new_names = [col_names_p1[j] for j in keep]
-    new_tab   = [[row[j] for j in keep] for row in tab_p1]
+# ──────────────────────────────────────────────────────────────
+# Build Phase-2 tableau
+# ──────────────────────────────────────────────────────────────
 
-    direction = -1 if choice == "max" else 1
-    z_row = [0.0] * len(new_names)
+def build_phase2_tableau(tab_p1, basics_p1, col_names_p1, obj, choice, num_vars, num_cons):
+    direction = Fraction(-1) if choice == "max" else Fraction(1)
+
+    # Identify artificial columns and drop them
+    art_col_indices = set()
+    for name in col_names_p1:
+        if name.startswith("a"):
+            art_col_indices.add(col_names_p1.index(name))
+
+    keep      = [j for j in range(len(col_names_p1)) if j not in art_col_indices]
+    new_names = [col_names_p1[j] for j in keep]
+    new_tab   = [[Fraction(row[j]) for j in keep] for row in tab_p1]
+
+    # Build Phase-2 z-row
+    num_cols = len(keep)
+    z_row    = [Fraction(0)] * num_cols
     for i, c in enumerate(obj):
-        z_row[i] = direction * c
+        z_row[i] = direction * Fraction(c)
 
     old_to_new = {old: new for new, old in enumerate(keep)}
     new_basics = [old_to_new[b] for b in basics_p1]
 
-    # Eliminate each basic variable from the Phase 2 Z-row (canonical form).
-    # Collect ALL (factor, row) pairs from the ORIGINAL z_row FIRST,
-    # then apply — so no elimination corrupts the next factor read.
+    # Eliminate basics from Phase-2 z-row (canonical form)
     eliminations = []
     for i, bv in enumerate(new_basics):
         f = z_row[bv]
         if abs(f) > EPSILON:
             eliminations.append((f, i + 1))
-
     for f, row_idx in eliminations:
         for j in range(len(z_row)):
             z_row[j] -= f * new_tab[row_idx][j]
@@ -520,200 +367,297 @@ def build_phase2_tableau(tab_p1, basics_p1, col_names_p1, obj, choice, num_vars,
     return new_tab, new_basics, new_names
 
 
-def run_two_phase(obj, constraints, signs, rhs, choice, num_vars, num_cons):
+# ──────────────────────────────────────────────────────────────
+# Core simplex iterations
+# ──────────────────────────────────────────────────────────────
 
-    # ── PHASE 1 ──────────────────────────────────────────────────────────────
+def simplex_iterations(tableau, basics, col_names, method_label="",
+                       art_col_indices=None, phase=None):
+    """
+    Run simplex iterations on the given tableau.
+    art_col_indices: set of column indices that are artificial variables.
+    Returns (tableau, basics, status) where status in {"optimal","unbounded","infeasible"}.
+    """
+    if art_col_indices is None:
+        art_col_indices = set()
+
+    iteration = 0
+    while True:
+        iteration += 1
+        print(f"\n{'='*60}")
+        print(f"  {method_label}  Iteration {iteration}")
+        print(f"{'='*60}")
+
+        z_row   = tableau[0]
+        num_dec = len(tableau[0]) - 1    # exclude RHS
+
+        # Choose entering variable
+        pivot_col = choose_pivot_col(z_row, len(z_row))
+        if pivot_col == -1:
+            print("  >> All reduced costs are non-negative → OPTIMAL tableau reached.")
+            print_tableau(tableau, basics, col_names)
+            return tableau, basics, "optimal"
+
+        # Show tableau WITH ratio column before pivoting (Fix 1)
+        print(f"\n  Entering variable: {col_names[pivot_col]}")
+        print_tableau(tableau, basics, col_names,
+                      pivot_col=pivot_col, show_ratio=True)
+
+        # Choose leaving variable
+        pivot_row = choose_pivot_row(tableau, pivot_col)
+        if pivot_row == -1:
+            print("  >> Problem is UNBOUNDED.")
+            return tableau, basics, "unbounded"
+
+        leaving_var     = basics[pivot_row - 1]
+        leaving_name    = col_names[leaving_var]
+        entering_name   = col_names[pivot_col]
+
+        # Fix 2 – precise language about artificial variable departure
+        if leaving_var in art_col_indices:
+            print(f"\n  Leaving variable : {leaving_name}  (artificial)")
+            print(f"  >> Artificial variable {leaving_name} has LEFT the basis "
+                  f"(it is no longer a basic variable after this pivot).")
+        else:
+            print(f"\n  Leaving variable : {leaving_name}")
+
+        print(f"  Pivot element is at Row {pivot_row}, Column '{entering_name}'  "
+              f"= {fmt(Fraction(tableau[pivot_row][pivot_col]))}")
+
+        tableau         = pivot(tableau, pivot_row, pivot_col)
+        basics[pivot_row - 1] = pivot_col
+
+        # After pivot: check if any artificial is still basic at non-zero value
+        if art_col_indices:
+            still_basic = [(idx, col_names[b])
+                           for idx, b in enumerate(basics) if b in art_col_indices
+                           and abs(Fraction(tableau[idx + 1][-1])) > EPSILON]
+            if still_basic:
+                for _, aname in still_basic:
+                    print(f"  [Note] Artificial variable {aname} is STILL in the basis "
+                          f"with a non-zero value — feasibility not yet achieved.")
+
+
+def run_bigM(obj, constraints, signs, rhs, choice, num_vars, num_cons):
+    print("\n--- Building Big-M Tableau ---")
+    tableau, basics, col_names = build_bigM_tableau(
+        obj, constraints, signs, rhs, choice, num_vars, num_cons)
+
+    art_col_indices = {col_names.index(n) for n in col_names if n.startswith("a")}
+
+    print("\nInitial Big-M Tableau:")
+    print_tableau(tableau, basics, col_names)
+
+    tableau, basics, status = simplex_iterations(
+        tableau, basics, col_names,
+        method_label="Big-M",
+        art_col_indices=art_col_indices)
+
+    return tableau, basics, col_names, status
+
+
+def run_twophase(obj, constraints, signs, rhs, choice, num_vars, num_cons):
+    # ── Phase 1 ──
+    print("\n--- Building Phase-1 Tableau ---")
     tableau, basics, col_names, art_cols = build_phase1_tableau(
         obj, constraints, signs, rhs, num_vars, num_cons)
 
-    print("\n" + "=" * 65)
-    print("  PHASE 1  —  Minimise w = sum of artificial variables")
-    print("=" * 65)
-    print_explanation("initial", tableau, basics, col_names,
-                      num_vars=num_vars, method="Phase 1", choice=choice)
-    print()
+    art_col_indices = {col_idx for _, col_idx in art_cols}
+
+    print("\nInitial Phase-1 Tableau:")
     print_tableau(tableau, basics, col_names)
-    input("  Press ENTER for next step...")
 
-    for iteration in range(1, 100):
-        pc = find_pivot_col(tableau[0])
-        if pc == -1:
-            w_val = tableau[0][-1]
-            if w_val > EPSILON:
-                print("\n" + "=" * 65)
-                # FIX 6: Pass choice= here (was missing in original).
-                print_explanation("infeasible", tableau, basics, col_names,
-                                  choice=choice)
-                print_tableau(tableau, basics, col_names)
-                return
-            break   # Phase 1 optimal and feasible
+    tableau, basics, status = simplex_iterations(
+        tableau, basics, col_names,
+        method_label="Phase 1",
+        art_col_indices=art_col_indices,
+        phase=1)
 
-        pr, ratios = find_pivot_row(tableau, pc)
-        if pr == -1:
-            print("\n" + "=" * 65)
-            print_explanation("unbounded", tableau, basics, col_names,
-                              pivot_col=pc, choice=choice)
-            return
+    if status != "optimal":
+        return tableau, basics, col_names, status
 
-        print("\n" + "=" * 65)
-        print_explanation("pivot", tableau, basics, col_names,
-                          pivot_col=pc, pivot_row=pr, ratios=ratios,
-                          iteration=iteration, num_vars=num_vars,
-                          method="Phase 1", choice=choice)
-        print()
-        print("  Tableau BEFORE  ( [ ] = pivot element | ( ) = pivot col | * = pivot row )")
-        print()
-        print_tableau(tableau, basics, col_names, pivot_col=pc, pivot_row=pr)
-        tableau = do_pivot(tableau, pr, pc)
-        basics[pr - 1] = pc
-        print("  Tableau AFTER pivot:")
-        print()
-        print_tableau(tableau, basics, col_names)
-        input("  Press ENTER for next step...")
+    # Check Phase-1 objective value
+    w_val = Fraction(tableau[0][-1])
+    if abs(w_val) > EPSILON:
+        print(f"\n  Phase-1 objective w = {fmt(w_val)} ≠ 0 → Problem is INFEASIBLE.")
+        return tableau, basics, col_names, "infeasible"
 
-    # ── PHASE 2 ──────────────────────────────────────────────────────────────
+    # Check if any artificial is still basic (degenerate case)
+    still_in_basis = [(i, col_names[b]) for i, b in enumerate(basics)
+                      if b in art_col_indices]
+    if still_in_basis:
+        print("\n  [Note] The following artificial variable(s) are still in the basis "
+              "at value 0 after Phase 1.  They need to be pivoted out before Phase 2:")
+        for _, aname in still_in_basis:
+            print(f"    {aname} is still a BASIC variable (value = 0). "
+                  "One more pivot will remove it from the basis.")
+    else:
+        print("\n  Phase-1 complete: all artificials have LEFT the basis. "
+              "Proceeding to Phase 2.")
+
+    # ── Phase 2 ──
+    print("\n--- Building Phase-2 Tableau ---")
     tableau, basics, col_names = build_phase2_tableau(
-        tableau, basics, col_names, obj, choice, num_vars, art_cols)
+        tableau, basics, col_names, obj, choice, num_vars, num_cons)
 
-    print("\n" + "=" * 65)
-    print_explanation("phase2_start", tableau, basics, col_names, choice=choice)
-    print()
-    print("  PHASE 2  —  Optimise original objective Z")
-    print("=" * 65)
+    print("\nInitial Phase-2 Tableau:")
     print_tableau(tableau, basics, col_names)
-    input("  Press ENTER to begin Phase 2...")
 
-    for iteration in range(1, 100):
-        pc = find_pivot_col(tableau[0])
-        if pc == -1:
-            sc = detect_special_cases(tableau, basics, col_names, num_vars)
-            print("\n" + "=" * 65)
-            # FIX 7: choice= was present but double-checking it's passed correctly.
-            print_explanation("optimal", tableau, basics, col_names,
-                              num_vars=num_vars, choice=choice, special_cases=sc)
-            print()
-            print_tableau(tableau, basics, col_names)
-            return
+    tableau, basics, status = simplex_iterations(
+        tableau, basics, col_names,
+        method_label="Phase 2")
 
-        pr, ratios = find_pivot_row(tableau, pc)
-        if pr == -1:
-            print("\n" + "=" * 65)
-            print_explanation("unbounded", tableau, basics, col_names,
-                              pivot_col=pc, choice=choice)
-            return
-
-        print("\n" + "=" * 65)
-        print_explanation("pivot", tableau, basics, col_names,
-                          pivot_col=pc, pivot_row=pr, ratios=ratios,
-                          iteration=iteration, choice=choice,
-                          num_vars=num_vars, method="Phase 2")
-        print()
-        print("  Tableau BEFORE  ( [ ] = pivot element | ( ) = pivot col | * = pivot row )")
-        print()
-        print_tableau(tableau, basics, col_names, pivot_col=pc, pivot_row=pr)
-        tableau = do_pivot(tableau, pr, pc)
-        basics[pr - 1] = pc
-        print("  Tableau AFTER pivot:")
-        print()
-        print_tableau(tableau, basics, col_names)
-        input("  Press ENTER for next step...")
+    return tableau, basics, col_names, status
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# STANDARD SIMPLEX  (all-<= problems, no artificials)
-# ─────────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────
+# Print final solution
+# ──────────────────────────────────────────────────────────────
 
-def build_standard_tableau(obj, constraints, signs, rhs, choice, num_vars, num_cons):
-    direction = -1 if choice == "max" else 1
-    col_names = ([f"x{i+1}" for i in range(num_vars)]
-                 + [f"s{i+1}" for i in range(num_cons)]
-                 + ["RHS"])
-    z_row   = [direction * c for c in obj] + [0.0] * num_cons + [0.0]
-    tableau = [z_row]
+def print_solution(tableau, basics, col_names, choice, num_vars):
+    print("\n" + "="*60)
+    print("  OPTIMAL SOLUTION")
+    print("="*60)
+
+    values = {j: Fraction(0) for j in range(len(col_names) - 1)}
+    for r, bv in enumerate(basics):
+        values[bv] = Fraction(tableau[r + 1][-1])
+
+    for i in range(num_vars):
+        print(f"  x{i+1} = {fmt(values[i])}")
+
+    z_raw = Fraction(tableau[0][-1])
+    # The z-row RHS at optimality equals the actual optimal objective value
+    # (positive) for both max and min — the negation in direction is absorbed
+    # during pivoting, so z_raw already represents the true optimal Z.
+    z_val = z_raw
+    print(f"\n  Optimal Z = {fmt(z_val)}  ({'Maximized' if choice=='max' else 'Minimized'})")
+
+
+# ──────────────────────────────────────────────────────────────
+# Data input
+# ──────────────────────────────────────────────────────────────
+
+def get_problem_data():
+    print("\n" + "="*60)
+    print("  SIMPLEX METHOD SOLVER")
+    print("="*60)
+
+    num_vars = input_int("\nNumber of decision variables: ")
+    num_cons = input_int("Number of constraints: ")
+
+    # Fix 7 – Ask for positivity constraints separately
+    print("\n--- Positivity / Sign Constraints ---")
+    var_signs = {}
+    for i in range(num_vars):
+        ans = input_choice(
+            f"  Is x{i+1} non-negative (>=0), non-positive (<=0), "
+            f"or unrestricted? [pos/neg/free]: ",
+            ["pos", "neg", "free"])
+        var_signs[i] = ans
+
+    print("\n--- Objective Function ---")
+    choice = input_choice("Maximize or Minimize? [max/min]: ", ["max", "min"])
+
+    print(f"Enter coefficients of the objective function Z:")
+    obj = []
+    for i in range(num_vars):
+        obj.append(input_fraction(f"  Coefficient of x{i+1}: "))
+
+    # Handle non-positive / free variables by substitution
+    # non-positive x_i  →  substitute x_i = -y_i  (y_i >= 0)
+    # free x_i          →  substitute x_i = y_i+ - y_i-  (both >= 0)
+    # For simplicity we apply sign flips and note substitutions here.
+    print("\n--- Substitutions for sign constraints ---")
+    substitution_notes = []
+    effective_obj = list(obj)
+    for i, sgn in var_signs.items():
+        if sgn == "neg":
+            effective_obj[i] = -obj[i]
+            substitution_notes.append(
+                f"  x{i+1} <= 0 : substituted x{i+1} = -y{i+1}  (y{i+1} >= 0). "
+                f"Objective coefficient flipped to {fmt(-obj[i])}.")
+        elif sgn == "free":
+            substitution_notes.append(
+                f"  x{i+1} unrestricted : noted. Solver will treat as-is; "
+                f"ensure constraints reflect this.")
+    for note in substitution_notes:
+        print(note)
+    if not substitution_notes:
+        print("  All variables are non-negative (no substitutions needed).")
+
+    print("\n--- Constraints ---")
+    constraints = []
+    signs       = []
+    rhs_vals    = []
     for i in range(num_cons):
-        row = list(constraints[i])
-        for j in range(num_cons):
-            row.append(1.0 if i == j else 0.0)
-        row.append(float(rhs[i]))
-        tableau.append(row)
-    basics = [num_vars + i for i in range(num_cons)]
-    return tableau, basics, col_names
+        print(f"\n  Constraint {i+1}:")
+        row = []
+        for j in range(num_vars):
+            row.append(input_fraction(f"    Coefficient of x{j+1}: "))
+        # Fix 4 – rejects < and > with explanation
+        sign = input_sign(f"    Sign (<=, =, >=): ")
+        rhs  = input_fraction(f"    RHS value: ")
+
+        # Handle non-positive variable substitutions in constraints
+        for idx, sgn in var_signs.items():
+            if sgn == "neg":
+                row[idx] = -row[idx]
+
+        constraints.append(row)
+        signs.append(sign)
+        rhs_vals.append(rhs)
+
+    print("\n--- Simplex Method ---")
+    method = input_choice("Method? [bigm/twophase]: ", ["bigm", "twophase"])
+
+    return (effective_obj, constraints, signs, rhs_vals,
+            choice, num_vars, num_cons, method, var_signs)
 
 
-def run_standard(obj, constraints, signs, rhs, choice, num_vars, num_cons):
-    tableau, basics, col_names = build_standard_tableau(
-        obj, constraints, signs, rhs, choice, num_vars, num_cons)
-
-    print("\n" + "=" * 65)
-    print_explanation("initial", tableau, basics, col_names,
-                      num_vars=num_vars, method="Standard Simplex", choice=choice)
-    print()
-    print_tableau(tableau, basics, col_names)
-    input("  Press ENTER for next step...")
-
-    for iteration in range(1, 100):
-        pc = find_pivot_col(tableau[0])
-        if pc == -1:
-            sc = detect_special_cases(tableau, basics, col_names, num_vars)
-            print("\n" + "=" * 65)
-            print_explanation("optimal", tableau, basics, col_names,
-                              num_vars=num_vars, choice=choice, special_cases=sc)
-            print()
-            print_tableau(tableau, basics, col_names)
-            return
-
-        pr, ratios = find_pivot_row(tableau, pc)
-        if pr == -1:
-            print("\n" + "=" * 65)
-            print_explanation("unbounded", tableau, basics, col_names,
-                              pivot_col=pc, choice=choice)
-            return
-
-        print("\n" + "=" * 65)
-        print_explanation("pivot", tableau, basics, col_names,
-                          pivot_col=pc, pivot_row=pr, ratios=ratios,
-                          iteration=iteration, choice=choice,
-                          num_vars=num_vars, method="Standard")
-        print()
-        print("  Tableau BEFORE  ( [ ] = pivot element | ( ) = pivot col | * = pivot row )")
-        print()
-        print_tableau(tableau, basics, col_names, pivot_col=pc, pivot_row=pr)
-        tableau = do_pivot(tableau, pr, pc)
-        basics[pr - 1] = pc
-        print("  Tableau AFTER pivot:")
-        print()
-        print_tableau(tableau, basics, col_names)
-        input("  Press ENTER for next step...")
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# MAIN
-# ─────────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────
+# Main
+# ──────────────────────────────────────────────────────────────
 
 def main():
-    coefficients, signs, rhs, choice = get_input()
+    (obj, constraints, signs, rhs, choice,
+     num_vars, num_cons, method, var_signs) = get_problem_data()
 
-    obj         = coefficients[0]
-    constraints = coefficients[1:]
-    num_vars    = len(obj)
-    num_cons    = len(rhs)
-
-    needs_artificial = any(s in (">=", "=") for s in signs)
-
-    if needs_artificial:
-        print("\n  This problem has >= or = constraints and requires artificial variables.")
-        print("  Choose solution method:")
-        print("    1.  Big-M Method")
-        print("    2.  Two-Phase Method")
-        m = input("  Enter 1 or 2 : ").strip()
-        while m not in ("1", "2"):
-            m = input("  Please enter 1 or 2 : ").strip()
-        if m == "1":
-            run_bigM(obj, constraints, signs, rhs, choice, num_vars, num_cons)
+    print("\n" + "="*60)
+    print("  PROBLEM SUMMARY")
+    print("="*60)
+    direction_word = "Maximize" if choice == "max" else "Minimize"
+    obj_str = " + ".join(f"{fmt(c)}·x{i+1}" for i, c in enumerate(obj))
+    print(f"  {direction_word}  Z = {obj_str}")
+    print("  Subject to:")
+    for i in range(num_cons):
+        lhs = " + ".join(f"{fmt(constraints[i][j])}·x{j+1}"
+                         for j in range(num_vars))
+        print(f"    {lhs}  {signs[i]}  {fmt(rhs[i])}")
+    print("  Positivity constraints:")
+    for i in range(num_vars):
+        sgn = var_signs[i]
+        if sgn == "pos":
+            print(f"    x{i+1} >= 0")
+        elif sgn == "neg":
+            print(f"    x{i+1} <= 0  (solved as y{i+1} = -x{i+1} >= 0)")
         else:
-            run_two_phase(obj, constraints, signs, rhs, choice, num_vars, num_cons)
+            print(f"    x{i+1} unrestricted")
+    print()
+
+    if method == "bigm":
+        tableau, basics, col_names, status = run_bigM(
+            obj, constraints, signs, rhs, choice, num_vars, num_cons)
     else:
-        run_standard(obj, constraints, signs, rhs, choice, num_vars, num_cons)
+        tableau, basics, col_names, status = run_twophase(
+            obj, constraints, signs, rhs, choice, num_vars, num_cons)
+
+    if status == "optimal":
+        print_solution(tableau, basics, col_names, choice, num_vars)
+    elif status == "unbounded":
+        print("\n  >> The problem is UNBOUNDED — no finite optimal solution exists.")
+    elif status == "infeasible":
+        print("\n  >> The problem is INFEASIBLE — no feasible solution exists.")
 
 
 if __name__ == "__main__":
