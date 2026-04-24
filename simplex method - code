@@ -1,1 +1,287 @@
+def get_input():
+    print("=" * 60)
+    print("       SIMPLEX METHOD STEP-BY-STEP TUTOR")
+    print("=" * 60)
 
+    choice = input("\nMaximization or Minimization? (max/min): ").strip().lower()
+    num_variables = int(input("Enter number of decision variables: "))
+    num_constraints = int(input("Enter number of constraints: "))
+
+    coefficients = []
+    signs = []
+    rhs = []
+
+    print("\nEnter objective function coefficients (space-separated):")
+    obj_input = input("  e.g. for 5x1 + 4x2 enter: 5 4 --> ").split()
+    coefficients.append([float(x) for x in obj_input])
+
+    print("\nEnter each constraint:")
+    for i in range(num_constraints):
+        print(f"\n  Constraint {i+1}:")
+        con_input = input(f"    Coefficients (space-separated): ").split()
+        coefficients.append([float(x) for x in con_input])
+        sign = input(f"    Sign (<= / >= / =): ").strip()
+        signs.append(sign)
+        rhs_val = float(input(f"    RHS value: "))
+        rhs.append(rhs_val)
+
+    return coefficients, signs, rhs, choice
+
+
+def build_var_names(num_vars, num_cons):
+    names = []
+    for i in range(num_vars):
+        names.append(f"x{i+1}")
+    for i in range(num_cons):
+        names.append(f"s{i+1}")
+    return names
+
+
+def build_initial_tableau(obj, constraints, signs, rhs, choice, var_names, num_vars, num_cons):
+    sign = -1 if choice == "max" else 1
+    z_row = [sign * c for c in obj] + [0.0] * num_cons + [0.0]
+
+    tableau = [z_row]
+    for i in range(num_cons):
+        row = list(constraints[i])
+        for j in range(num_cons):
+            row.append(1.0 if i == j else 0.0)
+        row.append(float(rhs[i]))
+        tableau.append(row)
+
+    basics = [num_vars + i for i in range(num_cons)]
+    return tableau, basics
+
+
+def fmt(val):
+    rounded = round(val, 4)
+    if rounded == int(rounded):
+        return str(int(rounded))
+    return f"{rounded:.3f}"
+
+
+def print_tableau(tableau, basics, var_names, pivot_col=-1, pivot_row=-1):
+    num_cols = len(tableau[0])
+    col_width = 9
+
+    header = f"{'BV':>{col_width}}"
+    for name in var_names:
+        header += f"{name:>{col_width}}"
+    print(header)
+    print("-" * col_width * (len(var_names) + 1))
+
+    for ri, row in enumerate(tableau):
+        bv = "Z" if ri == 0 else var_names[basics[ri - 1]]
+
+        is_pivot_row = (ri == pivot_row)
+        is_z_row = (ri == 0)
+
+        row_str = f"{bv:>{col_width}}"
+        for ci, val in enumerate(row):
+            cell = fmt(val)
+            is_pivot_col = (ci == pivot_col and ri != 0)
+            is_pivot_cell = (ri == pivot_row and ci == pivot_col)
+
+            if is_pivot_cell:
+                cell = f"[{cell}]"      # pivot element marked with brackets
+            elif is_pivot_col:
+                cell = f"({cell})"      # pivot column marked with parens
+            elif is_pivot_row:
+                cell = f" {cell}*"      # pivot row marked with *
+
+            row_str += f"{cell:>{col_width}}"
+
+        if is_z_row:
+            row_str = "  " + row_str.strip()
+        print(row_str)
+
+    print()
+
+
+def find_pivot_col(z_row):
+    most_neg_val = -1e-9
+    most_neg_idx = -1
+    for j in range(len(z_row) - 1):
+        if z_row[j] < most_neg_val:
+            most_neg_val = z_row[j]
+            most_neg_idx = j
+    return most_neg_idx
+
+
+def find_pivot_row(tableau, pivot_col, basics, var_names):
+    ratios = []
+    for i in range(1, len(tableau)):
+        val = tableau[i][pivot_col]
+        rhs_val = tableau[i][-1]
+        if val > 1e-9:
+            ratios.append((rhs_val / val, i))
+        else:
+            ratios.append((float('inf'), i))
+    min_ratio, min_row = min(ratios, key=lambda x: x[0])
+    return min_row, ratios
+
+
+def do_pivot(tableau, pivot_row, pivot_col):
+    new_tab = [row[:] for row in tableau]
+    pv = new_tab[pivot_row][pivot_col]
+    new_tab[pivot_row] = [v / pv for v in new_tab[pivot_row]]
+    for i in range(len(new_tab)):
+        if i != pivot_row:
+            factor = new_tab[i][pivot_col]
+            new_tab[i] = [new_tab[i][j] - factor * new_tab[pivot_row][j]
+                          for j in range(len(new_tab[i]))]
+    return new_tab
+
+
+def print_step_explanation(phase, tableau, basics, var_names,
+                           pivot_col=-1, pivot_row=-1, ratios=None,
+                           iteration=0, choice="max", num_vars=2):
+    sep = "-" * 60
+    print(sep)
+
+    if phase == "initial":
+        neg_cols = [(var_names[j], fmt(tableau[0][j]))
+                    for j in range(len(tableau[0]) - 1)
+                    if tableau[0][j] < -1e-9]
+        print("STEP 0 — Initial Tableau")
+        print(sep)
+        print(f"  Slack variables {', '.join(var_names[num_vars:])} added to convert")
+        print(f"  inequalities into equalities.")
+        print(f"  All decision variables start at 0 (origin). Z = {fmt(tableau[0][-1])}")
+        if neg_cols:
+            neg_str = ", ".join([f"{n} ({v})" for n, v in neg_cols])
+            print(f"  Negative Z-row coefficients (can still improve): {neg_str}")
+        print(f"\n  NEXT: Choose the most negative Z-row coefficient as the entering variable.")
+
+    elif phase == "pivot":
+        entering = var_names[pivot_col]
+        leaving = var_names[basics[pivot_row - 1]]
+        pv = fmt(tableau[pivot_row][pivot_col])
+        z_coef = fmt(tableau[0][pivot_col])
+
+        neg_cols = [(var_names[j], fmt(tableau[0][j]))
+                    for j in range(len(tableau[0]) - 1)
+                    if tableau[0][j] < -1e-9]
+        neg_str = ", ".join([f"{n}({v})" for n, v in neg_cols])
+
+        print(f"ITERATION {iteration} — Pivot Step")
+        print(sep)
+        print(f"  Negative Z-row coefficients: {neg_str}")
+        print(f"\n  ENTERING VARIABLE: {entering}")
+        print(f"    Reason: {entering} has the most negative Z-row")
+        print(f"    coefficient = {z_coef}. Entering it will improve Z the most.")
+
+        print(f"\n  MINIMUM RATIO TEST (RHS / pivot-column coefficient):")
+        min_ratio = min(r for r, _ in ratios if r != float('inf'))
+        for ratio_val, row_idx in ratios:
+            bv = var_names[basics[row_idx - 1]]
+            col_val = fmt(tableau[row_idx][pivot_col])
+            rhs_val = fmt(tableau[row_idx][-1])
+            if ratio_val == float('inf'):
+                marker = "  (skip — non-positive coefficient)"
+                ratio_str = "N/A"
+            else:
+                ratio_str = fmt(ratio_val)
+                marker = "  <-- MINIMUM (leaving row)" if abs(ratio_val - min_ratio) < 1e-9 else ""
+            print(f"    Row {bv}: {rhs_val} / {col_val} = {ratio_str}{marker}")
+
+        print(f"\n  LEAVING VARIABLE: {leaving}")
+        print(f"    Reason: row {leaving} gives the smallest non-negative ratio = {fmt(min_ratio)}")
+        print(f"\n  PIVOT ELEMENT: [{pv}]  (row {leaving}, col {entering})")
+        print(f"    Step 1 — Divide pivot row by pivot element ({pv})")
+        print(f"    Step 2 — Eliminate {entering} from all other rows using row operations")
+        print(f"\n  NEXT: After pivot, {entering} enters the basis, {leaving} leaves.")
+
+    elif phase == "optimal":
+        z_val = abs(round(tableau[0][-1], 6))
+        solution = []
+        for i in range(num_vars):
+            b_row = basics.index(i) if i in basics else -1
+            val = tableau[b_row + 1][-1] if b_row >= 0 else 0.0
+            solution.append(f"{var_names[i]} = {fmt(val)}")
+        print("OPTIMAL SOLUTION FOUND")
+        print(sep)
+        print(f"  All Z-row coefficients are non-negative.")
+        print(f"  No variable can improve the objective further.")
+        print(f"\n  Optimal Z* = {fmt(z_val)}")
+        print(f"  Solution:  {',  '.join(solution)}")
+
+    elif phase == "unbounded":
+        entering = var_names[pivot_col]
+        print("PROBLEM IS UNBOUNDED")
+        print(sep)
+        print(f"  Entering variable {entering} has no positive coefficients")
+        print(f"  in its column — ratio test cannot determine a leaving variable.")
+        print(f"  Z can increase without limit. No finite optimal solution exists.")
+
+    print(sep)
+
+
+def simplex_tutor(tableau, basics, var_names, choice, num_vars, num_constraints):
+    print("\n" + "=" * 60)
+    print_step_explanation("initial", tableau, basics, var_names,
+                           num_vars=num_vars)
+    print()
+    print_tableau(tableau, basics, var_names)
+
+    input("  Press ENTER to continue to next step...")
+
+    for iteration in range(1, 51):
+        pc = find_pivot_col(tableau[0])
+
+        if pc == -1:
+            print("\n" + "=" * 60)
+            print_step_explanation("optimal", tableau, basics, var_names,
+                                   num_vars=num_vars, choice=choice)
+            print()
+            print_tableau(tableau, basics, var_names)
+            return
+
+        pr, ratios = find_pivot_row(tableau, pc, basics, var_names)
+
+        if pr == -1 or all(r == float('inf') for r, _ in ratios):
+            print("\n" + "=" * 60)
+            print_step_explanation("unbounded", tableau, basics, var_names,
+                                   pivot_col=pc)
+            return
+
+        print("\n" + "=" * 60)
+        print_step_explanation("pivot", tableau, basics, var_names,
+                               pivot_col=pc, pivot_row=pr, ratios=ratios,
+                               iteration=iteration, choice=choice,
+                               num_vars=num_vars)
+        print()
+        print("  Tableau BEFORE pivot ([ ] = pivot element, ( ) = pivot column, * = pivot row):")
+        print()
+        print_tableau(tableau, basics, var_names, pivot_col=pc, pivot_row=pr)
+
+        tableau = do_pivot(tableau, pr, pc)
+        basics[pr - 1] = pc
+
+        print("  Tableau AFTER pivot:")
+        print()
+        print_tableau(tableau, basics, var_names)
+
+        input("  Press ENTER to continue to next step...")
+
+
+def main():
+    coefficients, signs, rhs, choice = get_input()
+
+    obj = coefficients[0]
+    constraints = coefficients[1:]
+    num_vars = len(obj)
+    num_cons = len(rhs)
+
+    var_names = build_var_names(num_vars, num_cons)
+    var_names.append("RHS")
+
+    tableau, basics = build_initial_tableau(
+        obj, constraints, signs, rhs, choice, var_names, num_vars, num_cons
+    )
+
+    simplex_tutor(tableau, basics, var_names, choice, num_vars, num_cons)
+
+
+if __name__ == "__main__":
+    main()
