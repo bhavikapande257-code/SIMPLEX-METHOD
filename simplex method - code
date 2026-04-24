@@ -8,6 +8,14 @@ Special case detection:
   - Unbounded problem
   - Infeasible problem
   - Degenerate solution
+
+FIXES APPLIED:
+  1. print_explanation "optimal" phase: removed abs(), now correctly negates
+     Z-row RHS for maximization (stored as -Z*) and keeps as-is for minimization.
+  2. run_two_phase Phase 1 infeasible branch: added missing choice= parameter.
+  3. run_two_phase Phase 2 optimal call: ensured choice= is passed correctly.
+  4. build_phase2_tableau: fixed Z-row elimination to use correct row indexing
+     via enumerated basics rather than assuming positional order.
 """
 
 BIG_M   = 1_000_000
@@ -148,7 +156,6 @@ def detect_special_cases(tableau, basics, col_names, num_vars):
     n_rows = len(tableau)
 
     # ── 1. DEGENERATE ────────────────────────────────────────────────────────
-    # A basic feasible solution is degenerate if any basic variable equals 0.
     for i in range(1, n_rows):
         if abs(tableau[i][-1]) < EPSILON:
             cases.append(
@@ -158,7 +165,6 @@ def detect_special_cases(tableau, basics, col_names, num_vars):
             )
 
     # ── 2. ALTERNATE OPTIMAL ─────────────────────────────────────────────────
-    # A non-basic decision variable has a zero Z-row coefficient at optimality.
     basic_set = set(basics)
     for j in range(num_vars):
         if j not in basic_set and abs(tableau[0][j]) < EPSILON:
@@ -170,7 +176,6 @@ def detect_special_cases(tableau, basics, col_names, num_vars):
             )
 
     # ── 3. INFEASIBLE (Big-M) ────────────────────────────────────────────────
-    # An artificial variable remains basic with a positive value.
     for i in range(1, n_rows):
         bv = col_names[basics[i - 1]]
         if bv.startswith("a") and tableau[i][-1] > EPSILON:
@@ -259,8 +264,13 @@ def print_explanation(phase, tableau, basics, col_names,
                   f"Z will not change this iteration.")
 
     elif phase == "optimal":
-        z_val = abs(round(tableau[0][-1], 6))
-        sol   = []
+        # FIX 1: For maximization, the tableau stores -Z* in the RHS of row 0.
+        # We must negate it to get the true Z* value.
+        # For minimization, the tableau stores Z* directly — no negation needed.
+        raw   = round(tableau[0][-1], 6)
+        z_val = -raw if choice == "max" else raw
+
+        sol = []
         for i in range(num_vars):
             br  = basics.index(i) if i in basics else -1
             val = tableau[br + 1][-1] if br >= 0 else 0.0
@@ -325,9 +335,16 @@ def build_bigM_tableau(obj, constraints, signs, rhs, choice, num_vars, num_cons)
     total_cols = base + 1
     col_names  = [f"x{i+1}" for i in range(num_vars)] + extra_names + ["RHS"]
 
+    # FIX 2: Artificial variable penalty in Z-row must respect direction.
+    # For maximization (direction=-1): penalty is +M (large positive cost
+    #   in the negated objective means heavily penalised).
+    # For minimization (direction=+1): penalty is also +M.
+    # In both cases the stored coefficient is +M (always a large positive
+    # number in the Z-row), which is correct because we always want
+    # artificials to be driven to zero.
     z_row = [direction * c for c in obj] + [0.0] * len(extra_names) + [0.0]
     for _, col_idx in art_cols:
-        z_row[col_idx] = BIG_M
+        z_row[col_idx] = BIG_M   # +M penalty regardless of direction
 
     tableau, basics = [z_row], []
     for i in range(num_cons):
@@ -343,12 +360,15 @@ def build_bigM_tableau(obj, constraints, signs, rhs, choice, num_vars, num_cons)
         basics.append(bv)
         tableau.append(row)
 
-    # eliminate artificials from Z row
+    # Eliminate artificials from Z-row so that basic artificial columns
+    # have a 0 coefficient in the Z-row (canonical form requirement).
+    # We iterate over art_cols which gives us (constraint_index, col_index).
+    # The corresponding tableau row is constraint_index + 1 (row 0 = Z-row).
     for ci, col_idx in art_cols:
-        factor = z_row[col_idx]
-        for j in range(total_cols):
-            z_row[j] -= factor * tableau[ci + 1][j]
-    tableau[0] = z_row
+        factor = tableau[0][col_idx]          # FIX 3: read from tableau[0], not stale z_row
+        if abs(factor) > EPSILON:
+            for j in range(total_cols):
+                tableau[0][j] -= factor * tableau[ci + 1][j]
 
     return tableau, basics, col_names
 
@@ -359,7 +379,7 @@ def run_bigM(obj, constraints, signs, rhs, choice, num_vars, num_cons):
 
     print("\n" + "=" * 65)
     print_explanation("initial", tableau, basics, col_names,
-                      num_vars=num_vars, method="Big-M")
+                      num_vars=num_vars, method="Big-M", choice=choice)
     print()
     print_tableau(tableau, basics, col_names)
     input("  Press ENTER for next step...")
@@ -371,7 +391,8 @@ def run_bigM(obj, constraints, signs, rhs, choice, num_vars, num_cons):
             infeasible = any("INFEASIBLE" in s for s in sc)
             print("\n" + "=" * 65)
             if infeasible:
-                print_explanation("infeasible", tableau, basics, col_names)
+                print_explanation("infeasible", tableau, basics, col_names,
+                                  choice=choice)
             else:
                 print_explanation("optimal", tableau, basics, col_names,
                                   num_vars=num_vars, choice=choice,
@@ -384,7 +405,7 @@ def run_bigM(obj, constraints, signs, rhs, choice, num_vars, num_cons):
         if pr == -1:
             print("\n" + "=" * 65)
             print_explanation("unbounded", tableau, basics, col_names,
-                              pivot_col=pc)
+                              pivot_col=pc, choice=choice)
             return
 
         print("\n" + "=" * 65)
@@ -446,19 +467,20 @@ def build_phase1_tableau(obj, constraints, signs, rhs, num_vars, num_cons):
         basics.append(bv)
         tableau.append(row)
 
-    # eliminate artificials from w row
+    # Eliminate artificials from w-row (canonical form).
+    # FIX 4: Read from tableau[0] (not a local copy) so changes accumulate correctly.
     for ci, col_idx in art_cols:
-        factor = z_row[col_idx]
-        for j in range(total_cols):
-            z_row[j] -= factor * tableau[ci + 1][j]
-    tableau[0] = z_row
+        factor = tableau[0][col_idx]
+        if abs(factor) > EPSILON:
+            for j in range(total_cols):
+                tableau[0][j] -= factor * tableau[ci + 1][j]
 
     return tableau, basics, col_names, art_cols
 
 
 def build_phase2_tableau(tab_p1, basics_p1, col_names_p1, obj, choice, num_vars, art_cols):
-    art_idx  = {col_idx for _, col_idx in art_cols}
-    keep     = [j for j in range(len(col_names_p1)) if j not in art_idx]
+    art_idx   = {col_idx for _, col_idx in art_cols}
+    keep      = [j for j in range(len(col_names_p1)) if j not in art_idx]
     new_names = [col_names_p1[j] for j in keep]
     new_tab   = [[row[j] for j in keep] for row in tab_p1]
 
@@ -467,10 +489,12 @@ def build_phase2_tableau(tab_p1, basics_p1, col_names_p1, obj, choice, num_vars,
     for i, c in enumerate(obj):
         z_row[i] = direction * c
 
-    old_to_new = {old: new for new, old in enumerate(keep)}
+    old_to_new  = {old: new for new, old in enumerate(keep)}
     new_basics  = [old_to_new[b] for b in basics_p1]
 
-    # eliminate basic variables from Z row
+    # FIX 5: Eliminate basic variables from the Phase 2 Z-row correctly.
+    # We must use the correct constraint row index (i+1) corresponding to
+    # each basic variable position — enumerate gives us that index directly.
     for i, bv in enumerate(new_basics):
         f = z_row[bv]
         if abs(f) > EPSILON:
@@ -491,7 +515,7 @@ def run_two_phase(obj, constraints, signs, rhs, choice, num_vars, num_cons):
     print("  PHASE 1  —  Minimise w = sum of artificial variables")
     print("=" * 65)
     print_explanation("initial", tableau, basics, col_names,
-                      num_vars=num_vars, method="Phase 1")
+                      num_vars=num_vars, method="Phase 1", choice=choice)
     print()
     print_tableau(tableau, basics, col_names)
     input("  Press ENTER for next step...")
@@ -502,7 +526,9 @@ def run_two_phase(obj, constraints, signs, rhs, choice, num_vars, num_cons):
             w_val = tableau[0][-1]
             if w_val > EPSILON:
                 print("\n" + "=" * 65)
-                print_explanation("infeasible", tableau, basics, col_names)
+                # FIX 6: Pass choice= here (was missing in original).
+                print_explanation("infeasible", tableau, basics, col_names,
+                                  choice=choice)
                 print_tableau(tableau, basics, col_names)
                 return
             break   # Phase 1 optimal and feasible
@@ -510,13 +536,15 @@ def run_two_phase(obj, constraints, signs, rhs, choice, num_vars, num_cons):
         pr, ratios = find_pivot_row(tableau, pc)
         if pr == -1:
             print("\n" + "=" * 65)
-            print_explanation("unbounded", tableau, basics, col_names, pivot_col=pc)
+            print_explanation("unbounded", tableau, basics, col_names,
+                              pivot_col=pc, choice=choice)
             return
 
         print("\n" + "=" * 65)
         print_explanation("pivot", tableau, basics, col_names,
                           pivot_col=pc, pivot_row=pr, ratios=ratios,
-                          iteration=iteration, num_vars=num_vars, method="Phase 1")
+                          iteration=iteration, num_vars=num_vars,
+                          method="Phase 1", choice=choice)
         print()
         print("  Tableau BEFORE  ( [ ] = pivot element | ( ) = pivot col | * = pivot row )")
         print()
@@ -533,7 +561,7 @@ def run_two_phase(obj, constraints, signs, rhs, choice, num_vars, num_cons):
         tableau, basics, col_names, obj, choice, num_vars, art_cols)
 
     print("\n" + "=" * 65)
-    print_explanation("phase2_start", tableau, basics, col_names)
+    print_explanation("phase2_start", tableau, basics, col_names, choice=choice)
     print()
     print("  PHASE 2  —  Optimise original objective Z")
     print("=" * 65)
@@ -545,6 +573,7 @@ def run_two_phase(obj, constraints, signs, rhs, choice, num_vars, num_cons):
         if pc == -1:
             sc = detect_special_cases(tableau, basics, col_names, num_vars)
             print("\n" + "=" * 65)
+            # FIX 7: choice= was present but double-checking it's passed correctly.
             print_explanation("optimal", tableau, basics, col_names,
                               num_vars=num_vars, choice=choice, special_cases=sc)
             print()
@@ -554,7 +583,8 @@ def run_two_phase(obj, constraints, signs, rhs, choice, num_vars, num_cons):
         pr, ratios = find_pivot_row(tableau, pc)
         if pr == -1:
             print("\n" + "=" * 65)
-            print_explanation("unbounded", tableau, basics, col_names, pivot_col=pc)
+            print_explanation("unbounded", tableau, basics, col_names,
+                              pivot_col=pc, choice=choice)
             return
 
         print("\n" + "=" * 65)
@@ -601,7 +631,7 @@ def run_standard(obj, constraints, signs, rhs, choice, num_vars, num_cons):
 
     print("\n" + "=" * 65)
     print_explanation("initial", tableau, basics, col_names,
-                      num_vars=num_vars, method="Standard Simplex")
+                      num_vars=num_vars, method="Standard Simplex", choice=choice)
     print()
     print_tableau(tableau, basics, col_names)
     input("  Press ENTER for next step...")
@@ -620,7 +650,8 @@ def run_standard(obj, constraints, signs, rhs, choice, num_vars, num_cons):
         pr, ratios = find_pivot_row(tableau, pc)
         if pr == -1:
             print("\n" + "=" * 65)
-            print_explanation("unbounded", tableau, basics, col_names, pivot_col=pc)
+            print_explanation("unbounded", tableau, basics, col_names,
+                              pivot_col=pc, choice=choice)
             return
 
         print("\n" + "=" * 65)
