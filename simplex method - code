@@ -335,18 +335,16 @@ def build_bigM_tableau(obj, constraints, signs, rhs, choice, num_vars, num_cons)
     total_cols = base + 1
     col_names  = [f"x{i+1}" for i in range(num_vars)] + extra_names + ["RHS"]
 
-    # FIX 2: Artificial variable penalty in Z-row must respect direction.
-    # For maximization (direction=-1): penalty is +M (large positive cost
-    #   in the negated objective means heavily penalised).
-    # For minimization (direction=+1): penalty is also +M.
-    # In both cases the stored coefficient is +M (always a large positive
-    # number in the Z-row), which is correct because we always want
-    # artificials to be driven to zero.
+    # +M penalty for each artificial in the Z-row (maximization stores negated
+    # objective, so +M is correct in both max and min to penalise artificials).
     z_row = [direction * c for c in obj] + [0.0] * len(extra_names) + [0.0]
     for _, col_idx in art_cols:
-        z_row[col_idx] = BIG_M   # +M penalty regardless of direction
+        z_row[col_idx] = BIG_M
 
+    # Build constraint rows and track which tableau row each artificial lives in.
+    # art_row_map: col_index_of_artificial -> tableau_row_index (1-based)
     tableau, basics = [z_row], []
+    art_row_map = {}
     for i in range(num_cons):
         row = list(constraints[i]) + [0.0] * len(extra_names) + [rhs[i]]
         if i in slack_map:
@@ -355,20 +353,24 @@ def build_bigM_tableau(obj, constraints, signs, rhs, choice, num_vars, num_cons)
         for ci, col_idx in art_cols:
             if ci == i:
                 row[col_idx] = 1.0
+                art_row_map[col_idx] = len(tableau)   # row about to be appended
         bv = (slack_map[i][0] if (i in slack_map and slack_map[i][1] == "slack")
               else next(c for (ci, c) in art_cols if ci == i))
         basics.append(bv)
         tableau.append(row)
 
-    # Eliminate artificials from Z-row so that basic artificial columns
-    # have a 0 coefficient in the Z-row (canonical form requirement).
-    # We iterate over art_cols which gives us (constraint_index, col_index).
-    # The corresponding tableau row is constraint_index + 1 (row 0 = Z-row).
-    for ci, col_idx in art_cols:
-        factor = tableau[0][col_idx]          # FIX 3: read from tableau[0], not stale z_row
+    # Eliminate artificials from Z-row (canonical form).
+    # Collect ALL (factor, tableau_row) pairs FIRST from the original Z-row,
+    # then apply them — so no single elimination corrupts the next factor read.
+    eliminations = []
+    for _, col_idx in art_cols:
+        factor = tableau[0][col_idx]           # always BIG_M at this point
         if abs(factor) > EPSILON:
-            for j in range(total_cols):
-                tableau[0][j] -= factor * tableau[ci + 1][j]
+            eliminations.append((factor, art_row_map[col_idx]))
+
+    for factor, row_idx in eliminations:
+        for j in range(total_cols):
+            tableau[0][j] -= factor * tableau[row_idx][j]
 
     return tableau, basics, col_names
 
@@ -453,7 +455,10 @@ def build_phase1_tableau(obj, constraints, signs, rhs, num_vars, num_cons):
     for _, col_idx in art_cols:
         z_row[col_idx] = 1.0   # minimise sum of artificials
 
+    # Build constraint rows and track which tableau row each artificial lives in.
+    # art_row_map: col_index_of_artificial -> tableau_row_index (1-based)
     tableau, basics = [z_row], []
+    art_row_map = {}
     for i in range(num_cons):
         row = list(constraints[i]) + [0.0] * len(extra_names) + [rhs[i]]
         if i in slack_map:
@@ -462,18 +467,24 @@ def build_phase1_tableau(obj, constraints, signs, rhs, num_vars, num_cons):
         for ci, col_idx in art_cols:
             if ci == i:
                 row[col_idx] = 1.0
+                art_row_map[col_idx] = len(tableau)   # row about to be appended
         bv = (slack_map[i][0] if (i in slack_map and slack_map[i][1] == "slack")
               else next(c for (ci, c) in art_cols if ci == i))
         basics.append(bv)
         tableau.append(row)
 
     # Eliminate artificials from w-row (canonical form).
-    # FIX 4: Read from tableau[0] (not a local copy) so changes accumulate correctly.
-    for ci, col_idx in art_cols:
-        factor = tableau[0][col_idx]
+    # Collect ALL (factor, tableau_row) pairs FIRST from the original w-row,
+    # then apply them — so no single elimination corrupts the next factor read.
+    eliminations = []
+    for _, col_idx in art_cols:
+        factor = tableau[0][col_idx]           # always 1.0 at this point
         if abs(factor) > EPSILON:
-            for j in range(total_cols):
-                tableau[0][j] -= factor * tableau[ci + 1][j]
+            eliminations.append((factor, art_row_map[col_idx]))
+
+    for factor, row_idx in eliminations:
+        for j in range(total_cols):
+            tableau[0][j] -= factor * tableau[row_idx][j]
 
     return tableau, basics, col_names, art_cols
 
@@ -489,17 +500,21 @@ def build_phase2_tableau(tab_p1, basics_p1, col_names_p1, obj, choice, num_vars,
     for i, c in enumerate(obj):
         z_row[i] = direction * c
 
-    old_to_new  = {old: new for new, old in enumerate(keep)}
-    new_basics  = [old_to_new[b] for b in basics_p1]
+    old_to_new = {old: new for new, old in enumerate(keep)}
+    new_basics = [old_to_new[b] for b in basics_p1]
 
-    # FIX 5: Eliminate basic variables from the Phase 2 Z-row correctly.
-    # We must use the correct constraint row index (i+1) corresponding to
-    # each basic variable position — enumerate gives us that index directly.
+    # Eliminate each basic variable from the Phase 2 Z-row (canonical form).
+    # Collect ALL (factor, row) pairs from the ORIGINAL z_row FIRST,
+    # then apply — so no elimination corrupts the next factor read.
+    eliminations = []
     for i, bv in enumerate(new_basics):
         f = z_row[bv]
         if abs(f) > EPSILON:
-            for j in range(len(z_row)):
-                z_row[j] -= f * new_tab[i + 1][j]
+            eliminations.append((f, i + 1))
+
+    for f, row_idx in eliminations:
+        for j in range(len(z_row)):
+            z_row[j] -= f * new_tab[row_idx][j]
 
     new_tab[0] = z_row
     return new_tab, new_basics, new_names
