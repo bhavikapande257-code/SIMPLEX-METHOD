@@ -1,1 +1,932 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Solver — SimplexSolve</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <!-- Fraction.js for exact arithmetic -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fraction.js/4.3.4/fraction.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+    :root {
+      --sky: #c8dff7;
+      --lavender: #d6caee;
+      --deep-lav: #9a86c8;
+      --indigo: #5d4a9e;
+      --text: #1e1a2e;
+      --muted: #5a5372;
+      --glass-bg: rgba(255,255,255,0.5);
+      --glass-border: rgba(255,255,255,0.75);
+      --shadow: 0 8px 32px rgba(93,74,158,0.1);
+      --accent-enter: #22c55e;
+      --accent-leave: #ef4444;
+      --accent-pivot: #f59e0b;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      color: var(--text);
+      min-height: 100vh;
+      background: linear-gradient(135deg, #e8f4fd 0%, #ddd6f3 35%, #c8dff7 65%, #e0f2fe 100%);
+      background-attachment: fixed;
+      overflow-x: hidden;
+    }
+
+    .blob { position: fixed; border-radius: 50%; filter: blur(90px); opacity: 0.28; pointer-events: none; z-index: 0; animation: drift 20s ease-in-out infinite alternate; }
+    .blob-1 { width: 500px; height: 500px; background: #b3cef5; top: -100px; left: -80px; }
+    .blob-2 { width: 400px; height: 400px; background: #c4b5f0; top: 50%; right: -120px; animation-delay: -7s; }
+    .blob-3 { width: 350px; height: 350px; background: #a8d8ea; bottom: 0; left: 20%; animation-delay: -14s; }
+    @keyframes drift { 0%{transform:translate(0,0) scale(1)} 100%{transform:translate(25px,35px) scale(1.06)} }
+
+    /* NAV */
+    nav {
+      position: sticky; top: 0; z-index: 200;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1rem 3rem;
+      background: rgba(255,255,255,0.35);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--glass-border);
+    }
+    .nav-logo { font-family: 'Playfair Display', serif; font-size: 1.35rem; font-weight: 900; color: var(--indigo); text-decoration: none; }
+    .nav-logo span { color: var(--deep-lav); }
+    .nav-links a { text-decoration: none; color: var(--muted); font-size: 0.9rem; font-weight: 500; margin-left: 2rem; transition: color 0.2s; }
+    .nav-links a:hover, .nav-links a.active { color: var(--indigo); }
+
+    /* PAGE LAYOUT */
+    .page { position: relative; z-index: 1; max-width: 1000px; margin: 0 auto; padding: 3rem 2rem 6rem; }
+
+    .page-header { text-align: center; margin-bottom: 3rem; }
+    .page-tag { display: inline-block; background: rgba(157,134,200,0.15); border: 1px solid rgba(157,134,200,0.3); color: var(--indigo); font-size: 0.7rem; letter-spacing: 2.5px; text-transform: uppercase; padding: 0.35rem 1rem; border-radius: 100px; margin-bottom: 1rem; }
+    .page-title { font-family: 'Playfair Display', serif; font-size: clamp(2rem, 5vw, 3rem); font-weight: 900; color: var(--text); }
+
+    /* GLASS PANEL */
+    .panel {
+      background: var(--glass-bg);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--glass-border);
+      border-radius: 24px;
+      padding: 2.5rem;
+      box-shadow: var(--shadow);
+      margin-bottom: 2rem;
+    }
+    .panel-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 1.8rem;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+    .panel-title::before {
+      content: '';
+      display: block;
+      width: 4px; height: 20px;
+      background: linear-gradient(180deg, var(--indigo), var(--deep-lav));
+      border-radius: 2px;
+    }
+
+    /* FORM GRID */
+    .form-row { display: flex; gap: 1.2rem; flex-wrap: wrap; margin-bottom: 1.4rem; align-items: flex-end; }
+    .form-group { display: flex; flex-direction: column; gap: 0.4rem; flex: 1; min-width: 140px; }
+    .form-group label { font-size: 0.78rem; font-weight: 500; color: var(--muted); letter-spacing: 0.5px; }
+
+    input[type="number"],
+    input[type="text"],
+    select {
+      background: rgba(255,255,255,0.6);
+      border: 1.5px solid rgba(157,134,200,0.25);
+      border-radius: 10px;
+      padding: 0.6rem 0.9rem;
+      font-size: 0.92rem;
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      width: 100%;
+    }
+    input:focus, select:focus {
+      border-color: var(--deep-lav);
+      box-shadow: 0 0 0 3px rgba(157,134,200,0.15);
+    }
+
+    /* COEFFICIENT TABLE */
+    .coeff-table-wrap { overflow-x: auto; margin-top: 0.5rem; }
+    .coeff-table { border-collapse: collapse; width: 100%; min-width: 500px; }
+    .coeff-table th {
+      font-size: 0.72rem; font-weight: 500; color: var(--deep-lav);
+      letter-spacing: 1px; text-transform: uppercase;
+      padding: 0.5rem 0.5rem 0.8rem;
+      text-align: center;
+    }
+    .coeff-table td { padding: 0.35rem 0.4rem; text-align: center; }
+    .coeff-table input[type="text"] { text-align: center; padding: 0.5rem 0.4rem; font-family: 'JetBrains Mono', monospace; font-size: 0.88rem; min-width: 60px; }
+    .coeff-table .row-label { font-family: 'Playfair Display', serif; font-size: 0.85rem; font-weight: 700; color: var(--indigo); white-space: nowrap; }
+    .coeff-table select { padding: 0.5rem 0.3rem; min-width: 64px; font-size: 0.85rem; }
+
+    /* RADIO GROUP */
+    .radio-group { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+    .radio-btn input { display: none; }
+    .radio-btn label {
+      display: inline-block;
+      padding: 0.45rem 1.1rem;
+      border-radius: 100px;
+      border: 1.5px solid rgba(157,134,200,0.3);
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.2s;
+      background: rgba(255,255,255,0.4);
+    }
+    .radio-btn input:checked + label {
+      background: var(--indigo);
+      color: #fff;
+      border-color: var(--indigo);
+    }
+
+    /* SOLVE BUTTON */
+    .btn-solve {
+      width: 100%;
+      padding: 1rem;
+      background: linear-gradient(135deg, var(--indigo), var(--deep-lav));
+      color: #fff;
+      border: none;
+      border-radius: 14px;
+      font-size: 1.05rem;
+      font-weight: 500;
+      font-family: 'DM Sans', sans-serif;
+      cursor: pointer;
+      box-shadow: 0 6px 24px rgba(93,74,158,0.3);
+      transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
+      letter-spacing: 0.3px;
+    }
+    .btn-solve:hover { transform: translateY(-2px); box-shadow: 0 10px 32px rgba(93,74,158,0.38); }
+    .btn-solve:active { transform: translateY(0); }
+    .btn-solve:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* RESULTS */
+    #results { display: none; }
+    #results.visible { display: block; }
+
+    .result-banner {
+      border-radius: 16px;
+      padding: 1.5rem 2rem;
+      margin-bottom: 1.5rem;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .result-banner.optimal { background: rgba(34,197,94,0.12); border: 1.5px solid rgba(34,197,94,0.3); color: #166534; }
+    .result-banner.unbounded { background: rgba(234,179,8,0.12); border: 1.5px solid rgba(234,179,8,0.3); color: #713f12; }
+    .result-banner.infeasible { background: rgba(239,68,68,0.12); border: 1.5px solid rgba(239,68,68,0.3); color: #7f1d1d; }
+    .result-banner .banner-icon { font-size: 1.8rem; }
+
+    .solution-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
+    .solution-card {
+      background: rgba(255,255,255,0.6);
+      border: 1.5px solid var(--glass-border);
+      border-radius: 14px;
+      padding: 1.2rem;
+      text-align: center;
+    }
+    .solution-card .var-name { font-size: 0.75rem; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 0.4rem; }
+    .solution-card .var-val { font-family: 'JetBrains Mono', monospace; font-size: 1.4rem; font-weight: 500; color: var(--indigo); }
+    .solution-card.z-card { background: linear-gradient(135deg, rgba(93,74,158,0.1), rgba(157,134,200,0.15)); border-color: rgba(93,74,158,0.25); }
+
+    /* STEP DISPLAY */
+    .step-block { margin-bottom: 2rem; }
+    .step-header {
+      display: flex; align-items: center; gap: 0.8rem;
+      margin-bottom: 1rem;
+    }
+    .step-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      font-weight: 500;
+      padding: 0.25rem 0.7rem;
+      border-radius: 100px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .badge-phase1 { background: rgba(59,130,246,0.12); color: #1d4ed8; border: 1px solid rgba(59,130,246,0.25); }
+    .badge-phase2 { background: rgba(139,92,246,0.12); color: #5b21b6; border: 1px solid rgba(139,92,246,0.25); }
+    .badge-bigm { background: rgba(236,72,153,0.1); color: #9d174d; border: 1px solid rgba(236,72,153,0.2); }
+
+    .step-title-text { font-size: 0.95rem; font-weight: 500; color: var(--text); }
+    .pivot-info { font-size: 0.82rem; color: var(--muted); margin-bottom: 0.8rem; display: flex; gap: 1.5rem; flex-wrap: wrap; }
+    .pivot-info span { display: inline-flex; align-items: center; gap: 0.3rem; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .dot-enter { background: var(--accent-enter); }
+    .dot-leave { background: var(--accent-leave); }
+    .dot-pivot { background: var(--accent-pivot); }
+
+    /* TABLEAU TABLE */
+    .tableau-wrap { overflow-x: auto; }
+    .tableau-table {
+      border-collapse: separate;
+      border-spacing: 0;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.83rem;
+      width: 100%;
+      min-width: 400px;
+    }
+    .tableau-table th {
+      background: rgba(157,134,200,0.12);
+      color: var(--deep-lav);
+      font-size: 0.7rem;
+      font-weight: 500;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 0.6rem 0.8rem;
+      text-align: right;
+      border-bottom: 2px solid rgba(157,134,200,0.2);
+      white-space: nowrap;
+    }
+    .tableau-table th:first-child { text-align: left; border-radius: 12px 0 0 0; }
+    .tableau-table th:last-child { border-radius: 0 12px 0 0; }
+    .tableau-table td {
+      padding: 0.55rem 0.8rem;
+      text-align: right;
+      border-bottom: 1px solid rgba(157,134,200,0.1);
+      color: var(--text);
+      transition: background 0.15s;
+    }
+    .tableau-table td:first-child { text-align: left; font-weight: 500; color: var(--indigo); }
+    .tableau-table tr:last-child td:first-child { border-radius: 0 0 0 12px; }
+    .tableau-table tr:last-child td:last-child { border-radius: 0 0 12px 0; }
+    .tableau-table tr:hover td { background: rgba(255,255,255,0.35); }
+
+    .th-enter { background: rgba(34,197,94,0.15) !important; color: #166534 !important; }
+    .td-enter-col { background: rgba(34,197,94,0.06); }
+    .cell-pivot { background: rgba(245,158,11,0.22) !important; border-radius: 6px; font-weight: 700; color: #92400e !important; }
+    .th-ratio { background: rgba(99,102,241,0.1) !important; color: #4338ca !important; }
+    .td-ratio { color: #4338ca; font-style: italic; }
+    .row-z td { background: rgba(157,134,200,0.08); font-weight: 500; }
+    .row-leaving td:first-child { background: rgba(239,68,68,0.06); }
+
+    /* NOTES */
+    .notes-list { list-style: none; padding: 0; }
+    .notes-list li {
+      display: flex; align-items: flex-start; gap: 0.6rem;
+      font-size: 0.88rem; color: var(--muted);
+      padding: 0.45rem 0;
+      border-bottom: 1px solid rgba(157,134,200,0.1);
+    }
+    .notes-list li:last-child { border-bottom: none; }
+    .notes-list li::before { content: '→'; color: var(--deep-lav); flex-shrink: 0; margin-top: 1px; }
+
+    /* MESSAGE BOX */
+    .msg-box {
+      display: flex; align-items: center; gap: 0.7rem;
+      padding: 0.8rem 1.2rem;
+      border-radius: 10px;
+      font-size: 0.88rem;
+      margin-top: 0.5rem;
+    }
+    .msg-optimal { background: rgba(34,197,94,0.1); color: #166534; border: 1px solid rgba(34,197,94,0.2); }
+    .msg-warn { background: rgba(245,158,11,0.1); color: #92400e; border: 1px solid rgba(245,158,11,0.2); }
+
+    /* TEAM */
+    .team-section { padding: 5rem 2rem; position: relative; z-index: 1; }
+    .team-inner { max-width: 900px; margin: 0 auto; }
+    .team-header { text-align: center; margin-bottom: 3rem; }
+    .team-label { font-size: 0.7rem; letter-spacing: 3px; text-transform: uppercase; color: var(--deep-lav); font-weight: 500; margin-bottom: 0.6rem; }
+    .team-title { font-family: 'Playfair Display', serif; font-size: 2.4rem; font-weight: 900; color: var(--text); }
+    .team-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1.5rem; }
+    .team-card {
+      background: var(--glass-bg);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--glass-border);
+      border-radius: 20px;
+      padding: 2rem 1.5rem;
+      text-align: center;
+      box-shadow: var(--shadow);
+      transition: transform 0.3s, box-shadow 0.3s;
+    }
+    .team-card:hover { transform: translateY(-5px); box-shadow: 0 16px 40px rgba(93,74,158,0.15); }
+    .team-avatar {
+      width: 60px; height: 60px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--deep-lav), var(--sky));
+      margin: 0 auto 1rem;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Playfair Display', serif;
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #fff;
+    }
+    .team-name { font-weight: 500; font-size: 1rem; color: var(--text); margin-bottom: 0.25rem; }
+    .team-role { font-size: 0.8rem; color: var(--muted); }
+
+    /* DIVIDER */
+    .divider { height: 1px; background: linear-gradient(90deg, transparent, rgba(157,134,200,0.3), transparent); margin: 2rem 0; }
+
+    /* FOOTER */
+    footer { position: relative; z-index: 1; padding: 1.5rem 3rem; border-top: 1px solid rgba(157,134,200,0.2); display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; color: var(--muted); }
+    footer .footer-logo { font-family: 'Playfair Display', serif; font-weight: 900; color: var(--indigo); }
+
+    /* ERROR */
+    .error-msg { background: rgba(239,68,68,0.1); border: 1.5px solid rgba(239,68,68,0.25); border-radius: 12px; padding: 1rem 1.4rem; color: #7f1d1d; font-size: 0.9rem; margin-bottom: 1rem; display: none; }
+    .error-msg.visible { display: block; }
+
+    /* Responsive */
+    @media(max-width:600px){
+      nav { padding: 0.8rem 1.2rem; }
+      .panel { padding: 1.5rem; }
+      .page { padding: 2rem 1rem 5rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+  <div class="blob blob-3"></div>
+
+  <!-- NAV -->
+  <nav>
+    <a href="index.html" class="nav-logo">Simplex<span>Solve</span></a>
+    <div class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="solver.html" class="active">Solver</a>
+      <a href="#team">Meet the Team</a>
+    </div>
+  </nav>
+
+  <!-- SOLVER PAGE -->
+  <main class="page">
+    <div class="page-header">
+      <div class="page-tag">Interactive Solver</div>
+      <h1 class="page-title">Simplex Method Solver</h1>
+    </div>
+
+    <!-- STEP 1: DIMENSIONS -->
+    <div class="panel">
+      <div class="panel-title">Problem Setup</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Number of decision variables</label>
+          <input type="number" id="numVars" min="1" max="10" value="2">
+        </div>
+        <div class="form-group">
+          <label>Number of constraints</label>
+          <input type="number" id="numCons" min="1" max="10" value="2">
+        </div>
+        <div class="form-group">
+          <label>Objective</label>
+          <div class="radio-group">
+            <div class="radio-btn"><input type="radio" name="objective" id="objMax" value="max" checked><label for="objMax">Maximize</label></div>
+            <div class="radio-btn"><input type="radio" name="objective" id="objMin" value="min"><label for="objMin">Minimize</label></div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Method</label>
+          <div class="radio-group">
+            <div class="radio-btn"><input type="radio" name="method" id="mBigM" value="bigm" checked><label for="mBigM">Big-M</label></div>
+            <div class="radio-btn"><input type="radio" name="method" id="mTwo" value="twophase"><label for="mTwo">Two-Phase</label></div>
+          </div>
+        </div>
+      </div>
+      <button class="btn-solve" id="btnGenerate" style="max-width:220px" onclick="generateForm()">Generate Input Fields →</button>
+    </div>
+
+    <!-- DYNAMIC FORM -->
+    <div id="formArea" style="display:none">
+      <!-- Objective row -->
+      <div class="panel">
+        <div class="panel-title">Objective Function Coefficients</div>
+        <div class="coeff-table-wrap">
+          <table class="coeff-table">
+            <thead><tr id="objHeader"></tr></thead>
+            <tbody><tr id="objRow"><td class="row-label">Z&nbsp;=</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Variable sign constraints -->
+      <div class="panel">
+        <div class="panel-title">Variable Sign Constraints</div>
+        <div id="varSigns" style="display:flex;gap:1rem;flex-wrap:wrap;"></div>
+      </div>
+
+      <!-- Constraints -->
+      <div class="panel">
+        <div class="panel-title">Constraints</div>
+        <div class="coeff-table-wrap">
+          <table class="coeff-table">
+            <thead><tr id="conHeader"></tr></thead>
+            <tbody id="conBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="error-msg" id="errorMsg"></div>
+
+      <button class="btn-solve" id="btnSolve" onclick="solveLP()">⚡ Solve</button>
+    </div>
+
+    <!-- RESULTS -->
+    <div id="results">
+      <div class="divider"></div>
+      <div id="resultsInner"></div>
+    </div>
+  </main>
+
+  <!-- TEAM -->
+  <section class="team-section" id="team">
+    <div class="team-inner">
+      <div class="team-header">
+        <div class="team-label">The Builders</div>
+        <h2 class="team-title">Meet the Team</h2>
+      </div>
+      <div class="team-grid" id="teamGrid">
+        <!-- Populated by JS — edit names/roles below -->
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="footer-logo">SimplexSolve</div>
+    <div>Exact Fractions · Big-M &amp; Two-Phase</div>
+  </footer>
+
+  <!-- Simplex logic -->
+  <script src="simplex.js"></script>
+  <script>
+
+    // ── Team data (edit here) ──────────────────────────────────
+    const TEAM = [
+      { name: "Team Member 1", role: "Algorithm Design" },
+      { name: "Team Member 2", role: "Frontend & UI" },
+      { name: "Team Member 3", role: "Math & Validation" },
+      { name: "Team Member 4", role: "Testing & Docs" },
+    ];
+
+    (function buildTeam() {
+      const grid = document.getElementById('teamGrid');
+      TEAM.forEach(m => {
+        const initials = m.name.split(' ').map(w => w[0]).join('').slice(0,2);
+        grid.innerHTML += `
+          <div class="team-card">
+            <div class="team-avatar">${initials}</div>
+            <div class="team-name">${m.name}</div>
+            <div class="team-role">${m.role}</div>
+          </div>`;
+      });
+    })();
+
+    // ── State ─────────────────────────────────────────────────
+    let numVars = 2, numCons = 2;
+
+    function generateForm() {
+      numVars = parseInt(document.getElementById('numVars').value) || 2;
+      numCons = parseInt(document.getElementById('numCons').value) || 2;
+
+      if (numVars < 1 || numVars > 10 || numCons < 1 || numCons > 10) {
+        showError('Please enter 1–10 variables and 1–10 constraints.');
+        return;
+      }
+
+      // Objective header
+      const objHeader = document.getElementById('objHeader');
+      objHeader.innerHTML = '<th></th>';
+      for (let i = 1; i <= numVars; i++) objHeader.innerHTML += `<th>x${i}</th>`;
+
+      // Objective row
+      const objRow = document.getElementById('objRow');
+      objRow.innerHTML = '<td class="row-label">Z&nbsp;=</td>';
+      for (let i = 1; i <= numVars; i++) {
+        objRow.innerHTML += `<td><input type="text" id="obj_${i}" value="0" placeholder="0"></td>`;
+      }
+
+      // Variable signs
+      const vsDiv = document.getElementById('varSigns');
+      vsDiv.innerHTML = '';
+      for (let i = 1; i <= numVars; i++) {
+        vsDiv.innerHTML += `
+          <div class="form-group" style="min-width:130px;max-width:160px">
+            <label>x${i} bound</label>
+            <select id="sign_${i}">
+              <option value="pos">x${i} ≥ 0</option>
+              <option value="neg">x${i} ≤ 0</option>
+              <option value="free">Unrestricted</option>
+            </select>
+          </div>`;
+      }
+
+      // Constraint header
+      const conHeader = document.getElementById('conHeader');
+      conHeader.innerHTML = '<th>Row</th>';
+      for (let i = 1; i <= numVars; i++) conHeader.innerHTML += `<th>x${i}</th>`;
+      conHeader.innerHTML += '<th>Sign</th><th>RHS</th>';
+
+      // Constraint body
+      const conBody = document.getElementById('conBody');
+      conBody.innerHTML = '';
+      for (let r = 1; r <= numCons; r++) {
+        let row = `<tr><td class="row-label">C${r}</td>`;
+        for (let i = 1; i <= numVars; i++) {
+          row += `<td><input type="text" id="con_${r}_${i}" value="0" placeholder="0"></td>`;
+        }
+        row += `<td><select id="sign_c${r}">
+                  <option value="<=">≤</option>
+                  <option value="=">=</option>
+                  <option value=">=">≥</option>
+                </select></td>`;
+        row += `<td><input type="text" id="rhs_${r}" value="0" placeholder="0" style="max-width:80px"></td>`;
+        row += '</tr>';
+        conBody.innerHTML += row;
+      }
+
+      document.getElementById('formArea').style.display = 'block';
+      document.getElementById('results').style.display = 'none';
+      document.getElementById('resultsInner').innerHTML = '';
+      hideError();
+      document.getElementById('formArea').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // ── Parse helpers ─────────────────────────────────────────
+
+    /**
+     * BUG FIX 8: parseFrac must return a plain number (or string) that Fraction.js
+     * in simplex.js can consume via frac(). Passing a Fraction object directly
+     * to another Fraction() constructor sometimes causes issues with Fraction.js.
+     * We return the numeric value as a string like "3/4" or "2" so frac() in
+     * simplex.js always gets a fresh, clean Fraction from a string input.
+     */
+    function parseFrac(str) {
+      str = (str || '').trim();
+      if (!str) return null;
+      try {
+        // Handle fraction input like "3/4" or "-1/2"
+        if (str.includes('/')) {
+          const parts = str.split('/');
+          if (parts.length !== 2) return null;
+          const n = parseInt(parts[0].trim(), 10);
+          const d = parseInt(parts[1].trim(), 10);
+          if (isNaN(n) || isNaN(d) || d === 0) return null;
+          return new Fraction(n, d);
+        }
+        // Handle decimal or integer: always convert to number first.
+        // Fraction.js 4.x throws on plain integer strings like "5" in some builds.
+        const num = parseFloat(str);
+        if (isNaN(num)) return null;
+        return new Fraction(num);
+      } catch(e) { return null; }
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('errorMsg');
+      el.textContent = msg;
+      el.classList.add('visible');
+    }
+    function hideError() {
+      document.getElementById('errorMsg').classList.remove('visible');
+    }
+
+    // ── fmt for display in solver.html ────────────────────────
+
+    /**
+     * BUG FIX 9: The local fmt() in Solver.html must match the one in simplex.js.
+     * Fraction.js: f.s = sign (-1 or 1), f.n = abs(numerator), f.d = denominator.
+     */
+    function fmt(f) {
+      try {
+        f = new Fraction(f);
+      } catch(e) { return String(f); }
+      const num = f.s * f.n;
+      if (f.d === 1) return String(num);
+      return `${num}/${f.d}`;
+    }
+
+    // ── Solve ─────────────────────────────────────────────────
+    function solveLP() {
+      hideError();
+
+      // Always re-read numVars/numCons live from the DOM at solve-time.
+      // The module-level variables are stale if the user changed the setup
+      // inputs without clicking "Generate Input Fields" again.
+      const currentNumVars = parseInt(document.getElementById('numVars').value, 10) || 0;
+      const currentNumCons = parseInt(document.getElementById('numCons').value, 10) || 0;
+
+      // Guard: ensure the form has been generated.
+      if (!document.getElementById('obj_1')) {
+        showError('Please click "Generate Input Fields" first before solving.');
+        return;
+      }
+      // Guard: if the generated form dimension doesn't match the setup inputs,
+      // the user changed the numbers without regenerating — tell them.
+      if (!document.getElementById('obj_' + currentNumVars)) {
+        showError('Input fields are out of sync. Please click "Generate Input Fields" again.');
+        return;
+      }
+
+      // Sync the live counts into the global state vars used by the rest of the function.
+      numVars = currentNumVars;
+      numCons = currentNumCons;
+
+      const choice = document.querySelector('input[name="objective"]:checked').value;
+      const method = document.querySelector('input[name="method"]:checked').value;
+
+      // Parse objective — read, trim, and validate each coefficient explicitly.
+      const obj = [];
+      for (let i = 1; i <= numVars; i++) {
+        const el = document.getElementById('obj_' + i);
+        if (!el) {
+          showError('Input field for x' + i + ' objective not found. Please regenerate the form.');
+          return;
+        }
+        const raw = el.value.trim();
+        if (raw === '') {
+          showError('Objective coefficient for x' + i + ' is empty. Enter a number such as 0, 5, -2, or 1/4.');
+          return;
+        }
+        const v = parseFrac(raw);
+        if (v === null) {
+          showError('Invalid objective coefficient for x' + i + ': "' + raw + '". Use integers, decimals, or fractions like 5, -2, 0.5, 1/4.');
+          return;
+        }
+        obj.push(v);
+      }
+
+      // Variable signs
+      const varSigns = {};
+      for (let i = 1; i <= numVars; i++) {
+        const el = document.getElementById('sign_' + i);
+        varSigns[i-1] = el ? el.value : 'pos';
+      }
+
+      // Apply sign substitutions to objective (non-positive vars: flip coefficient)
+      const effectiveObj = obj.map((c, i) => {
+        if (varSigns[i] === 'neg') return c.mul(new Fraction(-1));
+        return c;
+      });
+
+      // Constraints
+      const constraints = [], signs = [], rhs = [];
+      for (let r = 1; r <= numCons; r++) {
+        const row = [];
+        for (let i = 1; i <= numVars; i++) {
+          const el = document.getElementById('con_' + r + '_' + i);
+          if (!el) { showError('Constraint ' + r + ' x' + i + ' field not found. Please regenerate the form.'); return; }
+          const raw = el.value.trim();
+          if (raw === '') { showError('Constraint ' + r + ', x' + i + ' is empty. Enter a number such as 0, 1, -2.'); return; }
+          const v = parseFrac(raw);
+          if (v === null) { showError('Invalid coefficient at constraint ' + r + ', x' + i + ': "' + raw + '". Use integers, decimals, or fractions.'); return; }
+          // Apply sign substitution: non-positive variable → flip column coefficient
+          row.push(varSigns[i-1] === 'neg' ? v.mul(new Fraction(-1)) : v);
+        }
+        const rhsEl = document.getElementById('rhs_' + r);
+        if (!rhsEl) { showError('RHS field for constraint ' + r + ' not found. Please regenerate the form.'); return; }
+        const rhsRaw = rhsEl.value.trim();
+        if (rhsRaw === '') { showError('RHS for constraint ' + r + ' is empty. Enter a number such as 0, 6, 24.'); return; }
+        const rhsV = parseFrac(rhsRaw);
+        if (rhsV === null) { showError('Invalid RHS for constraint ' + r + ': "' + rhsRaw + '". Use integers, decimals, or fractions.'); return; }
+
+        // If RHS is negative, multiply both sides by -1 and flip the sign.
+        // The simplex solver requires non-negative RHS values.
+        let finalRhs = rhsV;
+        let finalRow = row;
+        const signEl = document.getElementById('sign_c' + r);
+        let finalSign = signEl ? signEl.value : '<=';
+        if (new Fraction(rhsV).compare(new Fraction(0)) < 0) {
+          finalRhs = rhsV.mul(new Fraction(-1));
+          finalRow = row.map(v => v.mul(new Fraction(-1)));
+          if (finalSign === '<=') finalSign = '>=';
+          else if (finalSign === '>=') finalSign = '<=';
+          // '=' stays '='
+        }
+
+        constraints.push(finalRow);
+        signs.push(finalSign);
+        rhs.push(finalRhs);
+      }
+
+      // Run solver
+      let result;
+      try {
+        result = solve({ obj: effectiveObj, constraints, signs, rhs, choice, numVars, numCons, method });
+      } catch(e) {
+        showError('Solver error: ' + e.message);
+        console.error(e);
+        return;
+      }
+
+      renderResults(result, choice, numVars, method, obj, constraints, signs, rhs, varSigns);
+    }
+
+    // ── Render Results ─────────────────────────────────────────
+    function renderResults(result, choice, numVars, method, obj, constraints, signs, rhs, varSigns) {
+      const area = document.getElementById('resultsInner');
+      area.innerHTML = '';
+
+      const resultsDiv = document.getElementById('results');
+      resultsDiv.style.display = 'block';
+
+      // Problem summary panel
+      let summaryHTML = `<div class="panel">
+        <div class="panel-title">Problem Summary</div>`;
+      const dir = choice === 'max' ? 'Maximise' : 'Minimise';
+      const objStr = obj.map((c, i) => `${fmt(c)}·x${i+1}`).join(' + ');
+      summaryHTML += `<p style="font-family:'JetBrains Mono',monospace;font-size:0.9rem;margin-bottom:1rem;color:var(--indigo)">${dir} Z = ${objStr}</p>`;
+      summaryHTML += `<p style="font-size:0.78rem;color:var(--muted);margin-bottom:0.6rem;letter-spacing:1px;text-transform:uppercase;font-weight:500">Subject to:</p>`;
+      for (let r = 0; r < constraints.length; r++) {
+        const lhs = constraints[r].map((c, j) => `${fmt(c)}·x${j+1}`).join(' + ');
+        summaryHTML += `<p style="font-family:'JetBrains Mono',monospace;font-size:0.85rem;color:var(--text);margin-bottom:0.3rem">${lhs} ${signs[r]} ${fmt(rhs[r])}</p>`;
+      }
+      summaryHTML += `<p style="font-size:0.78rem;color:var(--muted);margin:0.8rem 0 0.4rem;letter-spacing:1px;text-transform:uppercase;font-weight:500">Variable Bounds:</p>`;
+      for (let i = 0; i < numVars; i++) {
+        const s = varSigns[i];
+        const txt = s === 'pos' ? `x${i+1} ≥ 0` : s === 'neg' ? `x${i+1} ≤ 0` : `x${i+1} unrestricted`;
+        summaryHTML += `<span style="display:inline-block;margin-right:1.5rem;font-family:'JetBrains Mono',monospace;font-size:0.83rem;color:var(--muted)">${txt}</span>`;
+      }
+      summaryHTML += `</div>`;
+
+      // Added variables notes
+      if (result.notes && result.notes.length) {
+        summaryHTML += `<div class="panel">
+          <div class="panel-title">Variables Added</div>
+          <ul class="notes-list">
+            ${result.notes.map(n => `<li>${n}</li>`).join('')}
+          </ul>
+        </div>`;
+      }
+
+      area.innerHTML += summaryHTML;
+
+      // Steps
+      const stepsPanel = document.createElement('div');
+      stepsPanel.className = 'panel';
+      stepsPanel.innerHTML = '<div class="panel-title">Step-by-Step Iterations</div>';
+
+      for (const step of result.steps) {
+        const block = document.createElement('div');
+        block.className = 'step-block';
+
+        const badgeClass = step.label && step.label.includes('Phase 1') ? 'badge-phase1'
+                         : step.label && step.label.includes('Phase 2') ? 'badge-phase2'
+                         : 'badge-bigm';
+
+        if (step.type === 'pivot' || step.type === 'optimal') {
+          const titleTxt = step.type === 'optimal'
+            ? `Iteration ${step.iteration} — Optimal`
+            : `Iteration ${step.iteration}`;
+
+          block.innerHTML = `
+            <div class="step-header">
+              <span class="step-badge ${badgeClass}">${step.label || ''}</span>
+              <span class="step-title-text">${titleTxt}</span>
+            </div>`;
+
+          if (step.type === 'pivot') {
+            block.innerHTML += `
+              <div class="pivot-info">
+                <span><span class="dot dot-enter"></span>Entering: <strong>${step.entering}</strong></span>
+                <span><span class="dot dot-leave"></span>Leaving: <strong>${step.leaving}</strong>${step.isArtLeaving ? ' <em style="color:var(--accent-leave)">(artificial)</em>' : ''}</span>
+                <span><span class="dot dot-pivot"></span>Pivot element: <strong>${step.pivotVal}</strong></span>
+              </div>`;
+          }
+
+          if (step.type === 'optimal') {
+            block.innerHTML += `<div class="msg-box msg-optimal">✓ ${step.message}</div>`;
+          }
+
+          block.innerHTML += renderTableau(
+            step.tableau, step.basics, step.colNames,
+            step.pivotCol, step.pivotRow, step.ratios,
+            step.type === 'optimal'
+          );
+        }
+
+        if (step.type === 'infeasible') {
+          block.innerHTML = `<div class="msg-box msg-warn">⚠ ${step.message}</div>`;
+        }
+        if (step.type === 'unbounded') {
+          block.innerHTML = `<div class="msg-box msg-warn">⚠ ${step.message}</div>`;
+        }
+
+        stepsPanel.appendChild(block);
+      }
+
+      area.appendChild(stepsPanel);
+
+      // Final result banner
+      let banner;
+      if (result.status === 'optimal') {
+        banner = `<div class="result-banner optimal"><span class="banner-icon">✅</span><div>
+          <strong>Optimal solution found</strong><br>
+          <span style="font-size:0.85rem">The problem has a unique (or possibly multiple) optimal solution.</span>
+        </div></div>`;
+      } else if (result.status === 'unbounded') {
+        banner = `<div class="result-banner unbounded"><span class="banner-icon">♾️</span><div>
+          <strong>Problem is Unbounded</strong><br>
+          <span style="font-size:0.85rem">The objective can be increased/decreased indefinitely.</span>
+        </div></div>`;
+      } else {
+        banner = `<div class="result-banner infeasible"><span class="banner-icon">🚫</span><div>
+          <strong>Problem is Infeasible</strong><br>
+          <span style="font-size:0.85rem">No feasible solution exists (Phase-1 objective &gt; 0).</span>
+        </div></div>`;
+      }
+
+      area.innerHTML += banner;
+
+      if (result.solution) {
+        const sol = result.solution;
+        let solHTML = `<div class="panel">
+          <div class="panel-title">Optimal Solution</div>
+          <div class="solution-grid">`;
+        for (const v of sol.vars) {
+          solHTML += `<div class="solution-card">
+            <div class="var-name">${v.name}</div>
+            <div class="var-val">${v.value}</div>
+          </div>`;
+        }
+        solHTML += `<div class="solution-card z-card">
+          <div class="var-name">Z (${sol.direction})</div>
+          <div class="var-val">${sol.z}</div>
+        </div>`;
+        solHTML += `</div></div>`;
+        area.innerHTML += solHTML;
+      }
+
+      resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    /**
+     * BUG FIX 11: renderTableau had broken column highlighting.
+     * - The pivot column header used a CSS class on <th> inside a <tr>, but
+     *   the old code used `.col-enter` as a row class, which doesn't work for
+     *   styling individual <th> cells. Fixed: apply class directly to each <th>.
+     * - The pivot row was marked with class "row-basis" but CSS targeted ".row-leaving".
+     *   Fixed: use "row-leaving" consistently.
+     * - The RHS column should never be highlighted as the entering column even
+     *   if pivotCol somehow equals the last index. Added a guard.
+     * - fmt() was called as fmt(new Fraction(val)) — redundant double-wrapping
+     *   when val is already a Fraction object. Simplified to fmt(val).
+     */
+    function renderTableau(tableau, basics, colNames, pivotCol, pivotRow, ratios, isOptimal) {
+      const showRatio = !isOptimal && pivotCol !== undefined && pivotCol !== null && ratios && ratios.length > 0;
+      const rhsIndex = colNames.length - 1; // last col before RHS header = RHS
+
+      let html = `<div class="tableau-wrap"><table class="tableau-table"><thead><tr>`;
+      html += `<th>Basis</th>`;
+
+      // Column headers — includes RHS as last colName entry
+      colNames.forEach((n, j) => {
+        const isEnterCol = !isOptimal && j === pivotCol;
+        const cls = isEnterCol ? ' class="th-enter"' : '';
+        html += `<th${cls}>${n}</th>`;
+      });
+      if (showRatio) html += `<th class="th-ratio">Ratio</th>`;
+      html += `</tr></thead><tbody>`;
+
+      for (let r = 0; r < tableau.length; r++) {
+        const isZRow = r === 0;
+        const isLeaving = !isOptimal && r === pivotRow;
+        let rowCls = isZRow ? ' class="row-z"' : isLeaving ? ' class="row-leaving"' : '';
+        html += `<tr${rowCls}>`;
+
+        // Basis label
+        const basisLabel = isZRow ? 'Z'
+          : (basics[r-1] !== undefined && basics[r-1] < colNames.length
+              ? colNames[basics[r-1]] : '?');
+        html += `<td>${basisLabel}</td>`;
+
+        // Cells
+        tableau[r].forEach((val, j) => {
+          const isPivotCell = !isOptimal && r === pivotRow && j === pivotCol;
+          const isEnterColCell = !isOptimal && !isZRow && j === pivotCol;
+          let cls = '';
+          if (isPivotCell) {
+            cls = ' class="cell-pivot"';
+          } else if (isEnterColCell) {
+            cls = ' class="td-enter-col"';
+          }
+          html += `<td${cls}>${fmt(val)}</td>`;
+        });
+
+        // Ratio column
+        if (showRatio) {
+          const ratio = r === 0 ? '' : (ratios[r-1] !== undefined ? ratios[r-1] : '—');
+          html += `<td class="td-ratio">${ratio}</td>`;
+        }
+
+        html += `</tr>`;
+      }
+
+      html += `</tbody></table></div>`;
+      return html;
+    }
+
+  </script>
+</body>
+</html>
