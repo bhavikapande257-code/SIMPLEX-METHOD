@@ -1,13 +1,22 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Solver — SimplexSolve</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
 
     :root {
       --sky: #c8dff7;
@@ -16,15 +25,17 @@
       --indigo: #5d4a9e;
       --text: #1e1a2e;
       --muted: #5a5372;
-      --glass-bg: rgba(255,255,255,0.5);
-      --glass-border: rgba(255,255,255,0.75);
-      --shadow: 0 8px 32px rgba(93,74,158,0.1);
+      --glass-bg: rgba(255, 255, 255, 0.5);
+      --glass-border: rgba(255, 255, 255, 0.75);
+      --shadow: 0 8px 32px rgba(93, 74, 158, 0.1);
       --accent-enter: #22c55e;
       --accent-leave: #ef4444;
       --accent-pivot: #f59e0b;
     }
 
-    html { scroll-behavior: smooth; }
+    html {
+      scroll-behavior: smooth;
+    }
 
     body {
       font-family: 'DM Sans', sans-serif;
@@ -35,30 +46,123 @@
       overflow-x: hidden;
     }
 
-    .blob { position: fixed; border-radius: 50%; filter: blur(90px); opacity: 0.28; pointer-events: none; z-index: 0; animation: drift 20s ease-in-out infinite alternate; }
-    .blob-1 { width: 500px; height: 500px; background: #b3cef5; top: -100px; left: -80px; }
-    .blob-2 { width: 400px; height: 400px; background: #c4b5f0; top: 50%; right: -120px; animation-delay: -7s; }
-    .blob-3 { width: 350px; height: 350px; background: #a8d8ea; bottom: 0; left: 20%; animation-delay: -14s; }
-    @keyframes drift { 0%{transform:translate(0,0) scale(1)} 100%{transform:translate(25px,35px) scale(1.06)} }
+    .blob {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(90px);
+      opacity: 0.28;
+      pointer-events: none;
+      z-index: 0;
+      animation: drift 20s ease-in-out infinite alternate;
+    }
+
+    .blob-1 {
+      width: 500px;
+      height: 500px;
+      background: #b3cef5;
+      top: -100px;
+      left: -80px;
+    }
+
+    .blob-2 {
+      width: 400px;
+      height: 400px;
+      background: #c4b5f0;
+      top: 50%;
+      right: -120px;
+      animation-delay: -7s;
+    }
+
+    .blob-3 {
+      width: 350px;
+      height: 350px;
+      background: #a8d8ea;
+      bottom: 0;
+      left: 20%;
+      animation-delay: -14s;
+    }
+
+    @keyframes drift {
+      0% {
+        transform: translate(0, 0) scale(1)
+      }
+
+      100% {
+        transform: translate(25px, 35px) scale(1.06)
+      }
+    }
 
     nav {
-      position: sticky; top: 0; z-index: 200;
-      display: flex; align-items: center; justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
       padding: 1rem 3rem;
-      background: rgba(255,255,255,0.35);
+      background: rgba(255, 255, 255, 0.35);
       backdrop-filter: blur(20px);
       border-bottom: 1px solid var(--glass-border);
     }
-    .nav-logo { font-family: 'Playfair Display', serif; font-size: 1.35rem; font-weight: 900; color: var(--indigo); text-decoration: none; }
-    .nav-logo span { color: var(--deep-lav); }
-    .nav-links a { text-decoration: none; color: var(--muted); font-size: 0.9rem; font-weight: 500; margin-left: 2rem; transition: color 0.2s; }
-    .nav-links a:hover, .nav-links a.active { color: var(--indigo); }
 
-    .page { position: relative; z-index: 1; max-width: 1000px; margin: 0 auto; padding: 3rem 2rem 6rem; }
+    .nav-logo {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.35rem;
+      font-weight: 900;
+      color: var(--indigo);
+      text-decoration: none;
+    }
 
-    .page-header { text-align: center; margin-bottom: 3rem; }
-    .page-tag { display: inline-block; background: rgba(157,134,200,0.15); border: 1px solid rgba(157,134,200,0.3); color: var(--indigo); font-size: 0.7rem; letter-spacing: 2.5px; text-transform: uppercase; padding: 0.35rem 1rem; border-radius: 100px; margin-bottom: 1rem; }
-    .page-title { font-family: 'Playfair Display', serif; font-size: clamp(2rem, 5vw, 3rem); font-weight: 900; color: var(--text); }
+    .nav-logo span {
+      color: var(--deep-lav);
+    }
+
+    .nav-links a {
+      text-decoration: none;
+      color: var(--muted);
+      font-size: 0.9rem;
+      font-weight: 500;
+      margin-left: 2rem;
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover,
+    .nav-links a.active {
+      color: var(--indigo);
+    }
+
+    .page {
+      position: relative;
+      z-index: 1;
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 3rem 2rem 6rem;
+    }
+
+    .page-header {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+
+    .page-tag {
+      display: inline-block;
+      background: rgba(157, 134, 200, 0.15);
+      border: 1px solid rgba(157, 134, 200, 0.3);
+      color: var(--indigo);
+      font-size: 0.7rem;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      padding: 0.35rem 1rem;
+      border-radius: 100px;
+      margin-bottom: 1rem;
+    }
+
+    .page-title {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(2rem, 5vw, 3rem);
+      font-weight: 900;
+      color: var(--text);
+    }
 
     .panel {
       background: var(--glass-bg);
@@ -69,6 +173,7 @@
       box-shadow: var(--shadow);
       margin-bottom: 2rem;
     }
+
     .panel-title {
       font-family: 'Playfair Display', serif;
       font-size: 1.2rem;
@@ -79,23 +184,44 @@
       align-items: center;
       gap: 0.6rem;
     }
+
     .panel-title::before {
       content: '';
       display: block;
-      width: 4px; height: 20px;
+      width: 4px;
+      height: 20px;
       background: linear-gradient(180deg, var(--indigo), var(--deep-lav));
       border-radius: 2px;
     }
 
-    .form-row { display: flex; gap: 1.2rem; flex-wrap: wrap; margin-bottom: 1.4rem; align-items: flex-end; }
-    .form-group { display: flex; flex-direction: column; gap: 0.4rem; flex: 1; min-width: 140px; }
-    .form-group label { font-size: 0.78rem; font-weight: 500; color: var(--muted); letter-spacing: 0.5px; }
+    .form-row {
+      display: flex;
+      gap: 1.2rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.4rem;
+      align-items: flex-end;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      flex: 1;
+      min-width: 140px;
+    }
+
+    .form-group label {
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: var(--muted);
+      letter-spacing: 0.5px;
+    }
 
     input[type="number"],
     input[type="text"],
     select {
-      background: rgba(255,255,255,0.6);
-      border: 1.5px solid rgba(157,134,200,0.25);
+      background: rgba(255, 255, 255, 0.6);
+      border: 1.5px solid rgba(157, 134, 200, 0.25);
       border-radius: 10px;
       padding: 0.6rem 0.9rem;
       font-size: 0.92rem;
@@ -105,39 +231,85 @@
       transition: border-color 0.2s, box-shadow 0.2s;
       width: 100%;
     }
-    input:focus, select:focus {
+
+    input:focus,
+    select:focus {
       border-color: var(--deep-lav);
-      box-shadow: 0 0 0 3px rgba(157,134,200,0.15);
+      box-shadow: 0 0 0 3px rgba(157, 134, 200, 0.15);
     }
 
-    .coeff-table-wrap { overflow-x: auto; margin-top: 0.5rem; }
-    .coeff-table { border-collapse: collapse; width: 100%; min-width: 500px; }
+    .coeff-table-wrap {
+      overflow-x: auto;
+      margin-top: 0.5rem;
+    }
+
+    .coeff-table {
+      border-collapse: collapse;
+      width: 100%;
+      min-width: 500px;
+    }
+
     .coeff-table th {
-      font-size: 0.72rem; font-weight: 500; color: var(--deep-lav);
-      letter-spacing: 1px; text-transform: uppercase;
+      font-size: 0.72rem;
+      font-weight: 500;
+      color: var(--deep-lav);
+      letter-spacing: 1px;
+      text-transform: uppercase;
       padding: 0.5rem 0.5rem 0.8rem;
       text-align: center;
     }
-    .coeff-table td { padding: 0.35rem 0.4rem; text-align: center; }
-    .coeff-table input[type="text"] { text-align: center; padding: 0.5rem 0.4rem; font-family: 'JetBrains Mono', monospace; font-size: 0.88rem; min-width: 60px; }
-    .coeff-table .row-label { font-family: 'Playfair Display', serif; font-size: 0.85rem; font-weight: 700; color: var(--indigo); white-space: nowrap; }
-    .coeff-table select { padding: 0.5rem 0.3rem; min-width: 64px; font-size: 0.85rem; }
 
-    .radio-group { display: flex; gap: 0.6rem; flex-wrap: wrap; }
-    .radio-btn input { display: none; }
+    .coeff-table td {
+      padding: 0.35rem 0.4rem;
+      text-align: center;
+    }
+
+    .coeff-table input[type="text"] {
+      text-align: center;
+      padding: 0.5rem 0.4rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.88rem;
+      min-width: 60px;
+    }
+
+    .coeff-table .row-label {
+      font-family: 'Playfair Display', serif;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--indigo);
+      white-space: nowrap;
+    }
+
+    .coeff-table select {
+      padding: 0.5rem 0.3rem;
+      min-width: 64px;
+      font-size: 0.85rem;
+    }
+
+    .radio-group {
+      display: flex;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+    }
+
+    .radio-btn input {
+      display: none;
+    }
+
     .radio-btn label {
       display: inline-block;
       padding: 0.45rem 1.1rem;
       border-radius: 100px;
-      border: 1.5px solid rgba(157,134,200,0.3);
+      border: 1.5px solid rgba(157, 134, 200, 0.3);
       font-size: 0.85rem;
       font-weight: 500;
       color: var(--muted);
       cursor: pointer;
       transition: all 0.2s;
-      background: rgba(255,255,255,0.4);
+      background: rgba(255, 255, 255, 0.4);
     }
-    .radio-btn input:checked + label {
+
+    .radio-btn input:checked+label {
       background: var(--indigo);
       color: #fff;
       border-color: var(--indigo);
@@ -154,16 +326,32 @@
       font-weight: 500;
       font-family: 'DM Sans', sans-serif;
       cursor: pointer;
-      box-shadow: 0 6px 24px rgba(93,74,158,0.3);
+      box-shadow: 0 6px 24px rgba(93, 74, 158, 0.3);
       transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
       letter-spacing: 0.3px;
     }
-    .btn-solve:hover { transform: translateY(-2px); box-shadow: 0 10px 32px rgba(93,74,158,0.38); }
-    .btn-solve:active { transform: translateY(0); }
-    .btn-solve:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    #results { display: none; }
-    #results.visible { display: block; }
+    .btn-solve:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 32px rgba(93, 74, 158, 0.38);
+    }
+
+    .btn-solve:active {
+      transform: translateY(0);
+    }
+
+    .btn-solve:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    #results {
+      display: none;
+    }
+
+    #results.visible {
+      display: block;
+    }
 
     .result-banner {
       border-radius: 16px;
@@ -174,25 +362,75 @@
       align-items: center;
       gap: 1rem;
     }
-    .result-banner.optimal { background: rgba(34,197,94,0.12); border: 1.5px solid rgba(34,197,94,0.3); color: #166534; }
-    .result-banner.unbounded { background: rgba(234,179,8,0.12); border: 1.5px solid rgba(234,179,8,0.3); color: #713f12; }
-    .result-banner.infeasible { background: rgba(239,68,68,0.12); border: 1.5px solid rgba(239,68,68,0.3); color: #7f1d1d; }
-    .result-banner .banner-icon { font-size: 1.8rem; }
 
-    .solution-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
+    .result-banner.optimal {
+      background: rgba(34, 197, 94, 0.12);
+      border: 1.5px solid rgba(34, 197, 94, 0.3);
+      color: #166534;
+    }
+
+    .result-banner.unbounded {
+      background: rgba(234, 179, 8, 0.12);
+      border: 1.5px solid rgba(234, 179, 8, 0.3);
+      color: #713f12;
+    }
+
+    .result-banner.infeasible {
+      background: rgba(239, 68, 68, 0.12);
+      border: 1.5px solid rgba(239, 68, 68, 0.3);
+      color: #7f1d1d;
+    }
+
+    .result-banner .banner-icon {
+      font-size: 1.8rem;
+    }
+
+    .solution-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 1rem;
+      margin: 1.5rem 0;
+    }
+
     .solution-card {
-      background: rgba(255,255,255,0.6);
+      background: rgba(255, 255, 255, 0.6);
       border: 1.5px solid var(--glass-border);
       border-radius: 14px;
       padding: 1.2rem;
       text-align: center;
     }
-    .solution-card .var-name { font-size: 0.75rem; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 0.4rem; }
-    .solution-card .var-val { font-family: 'JetBrains Mono', monospace; font-size: 1.4rem; font-weight: 500; color: var(--indigo); }
-    .solution-card.z-card { background: linear-gradient(135deg, rgba(93,74,158,0.1), rgba(157,134,200,0.15)); border-color: rgba(93,74,158,0.25); }
 
-    .step-block { margin-bottom: 2rem; }
-    .step-header { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 1rem; }
+    .solution-card .var-name {
+      font-size: 0.75rem;
+      color: var(--muted);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 0.4rem;
+    }
+
+    .solution-card .var-val {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.4rem;
+      font-weight: 500;
+      color: var(--indigo);
+    }
+
+    .solution-card.z-card {
+      background: linear-gradient(135deg, rgba(93, 74, 158, 0.1), rgba(157, 134, 200, 0.15));
+      border-color: rgba(93, 74, 158, 0.25);
+    }
+
+    .step-block {
+      margin-bottom: 2rem;
+    }
+
+    .step-header {
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      margin-bottom: 1rem;
+    }
+
     .step-badge {
       font-family: 'JetBrains Mono', monospace;
       font-size: 0.72rem;
@@ -202,19 +440,69 @@
       letter-spacing: 1px;
       text-transform: uppercase;
     }
-    .badge-phase1 { background: rgba(59,130,246,0.12); color: #1d4ed8; border: 1px solid rgba(59,130,246,0.25); }
-    .badge-phase2 { background: rgba(139,92,246,0.12); color: #5b21b6; border: 1px solid rgba(139,92,246,0.25); }
-    .badge-bigm { background: rgba(236,72,153,0.1); color: #9d174d; border: 1px solid rgba(236,72,153,0.2); }
 
-    .step-title-text { font-size: 0.95rem; font-weight: 500; color: var(--text); }
-    .pivot-info { font-size: 0.82rem; color: var(--muted); margin-bottom: 0.8rem; display: flex; gap: 1.5rem; flex-wrap: wrap; }
-    .pivot-info span { display: inline-flex; align-items: center; gap: 0.3rem; }
-    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-    .dot-enter { background: var(--accent-enter); }
-    .dot-leave { background: var(--accent-leave); }
-    .dot-pivot { background: var(--accent-pivot); }
+    .badge-phase1 {
+      background: rgba(59, 130, 246, 0.12);
+      color: #1d4ed8;
+      border: 1px solid rgba(59, 130, 246, 0.25);
+    }
 
-    .tableau-wrap { overflow-x: auto; }
+    .badge-phase2 {
+      background: rgba(139, 92, 246, 0.12);
+      color: #5b21b6;
+      border: 1px solid rgba(139, 92, 246, 0.25);
+    }
+
+    .badge-bigm {
+      background: rgba(236, 72, 153, 0.1);
+      color: #9d174d;
+      border: 1px solid rgba(236, 72, 153, 0.2);
+    }
+
+    .step-title-text {
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .pivot-info {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-bottom: 0.8rem;
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .pivot-info span {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .dot-enter {
+      background: var(--accent-enter);
+    }
+
+    .dot-leave {
+      background: var(--accent-leave);
+    }
+
+    .dot-pivot {
+      background: var(--accent-pivot);
+    }
+
+    .tableau-wrap {
+      overflow-x: auto;
+    }
+
     .tableau-table {
       border-collapse: separate;
       border-spacing: 0;
@@ -223,8 +511,9 @@
       width: 100%;
       min-width: 400px;
     }
+
     .tableau-table th {
-      background: rgba(157,134,200,0.12);
+      background: rgba(157, 134, 200, 0.12);
       color: var(--deep-lav);
       font-size: 0.7rem;
       font-weight: 500;
@@ -232,55 +521,158 @@
       text-transform: uppercase;
       padding: 0.6rem 0.8rem;
       text-align: right;
-      border-bottom: 2px solid rgba(157,134,200,0.2);
+      border-bottom: 2px solid rgba(157, 134, 200, 0.2);
       white-space: nowrap;
     }
-    .tableau-table th:first-child { text-align: left; border-radius: 12px 0 0 0; }
-    .tableau-table th:last-child { border-radius: 0 12px 0 0; }
+
+    .tableau-table th:first-child {
+      text-align: left;
+      border-radius: 12px 0 0 0;
+    }
+
+    .tableau-table th:last-child {
+      border-radius: 0 12px 0 0;
+    }
+
     .tableau-table td {
       padding: 0.55rem 0.8rem;
       text-align: right;
-      border-bottom: 1px solid rgba(157,134,200,0.1);
+      border-bottom: 1px solid rgba(157, 134, 200, 0.1);
       color: var(--text);
       transition: background 0.15s;
     }
-    .tableau-table td:first-child { text-align: left; font-weight: 500; color: var(--indigo); }
-    .tableau-table tr:hover td { background: rgba(255,255,255,0.35); }
 
-    .th-enter { background: rgba(34,197,94,0.15) !important; color: #166534 !important; }
-    .td-enter-col { background: rgba(34,197,94,0.06); }
-    .cell-pivot { background: rgba(245,158,11,0.22) !important; border-radius: 6px; font-weight: 700; color: #92400e !important; }
-    .th-ratio { background: rgba(99,102,241,0.1) !important; color: #4338ca !important; }
-    .td-ratio { color: #4338ca; font-style: italic; }
-    .row-z td { background: rgba(157,134,200,0.08); font-weight: 500; }
-    .row-leaving td:first-child { background: rgba(239,68,68,0.06); }
-
-    .notes-list { list-style: none; padding: 0; }
-    .notes-list li {
-      display: flex; align-items: flex-start; gap: 0.6rem;
-      font-size: 0.88rem; color: var(--muted);
-      padding: 0.45rem 0;
-      border-bottom: 1px solid rgba(157,134,200,0.1);
+    .tableau-table td:first-child {
+      text-align: left;
+      font-weight: 500;
+      color: var(--indigo);
     }
-    .notes-list li:last-child { border-bottom: none; }
-    .notes-list li::before { content: '→'; color: var(--deep-lav); flex-shrink: 0; margin-top: 1px; }
+
+    .tableau-table tr:hover td {
+      background: rgba(255, 255, 255, 0.35);
+    }
+
+    .th-enter {
+      background: rgba(34, 197, 94, 0.15) !important;
+      color: #166534 !important;
+    }
+
+    .td-enter-col {
+      background: rgba(34, 197, 94, 0.06);
+    }
+
+    .cell-pivot {
+      background: rgba(245, 158, 11, 0.22) !important;
+      border-radius: 6px;
+      font-weight: 700;
+      color: #92400e !important;
+    }
+
+    .th-ratio {
+      background: rgba(99, 102, 241, 0.1) !important;
+      color: #4338ca !important;
+    }
+
+    .td-ratio {
+      color: #4338ca;
+      font-style: italic;
+    }
+
+    .row-z td {
+      background: rgba(157, 134, 200, 0.08);
+      font-weight: 500;
+    }
+
+    .row-leaving td:first-child {
+      background: rgba(239, 68, 68, 0.06);
+    }
+
+    .notes-list {
+      list-style: none;
+      padding: 0;
+    }
+
+    .notes-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.6rem;
+      font-size: 0.88rem;
+      color: var(--muted);
+      padding: 0.45rem 0;
+      border-bottom: 1px solid rgba(157, 134, 200, 0.1);
+    }
+
+    .notes-list li:last-child {
+      border-bottom: none;
+    }
+
+    .notes-list li::before {
+      content: '→';
+      color: var(--deep-lav);
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
 
     .msg-box {
-      display: flex; align-items: center; gap: 0.7rem;
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
       padding: 0.8rem 1.2rem;
       border-radius: 10px;
       font-size: 0.88rem;
       margin-top: 0.5rem;
     }
-    .msg-optimal { background: rgba(34,197,94,0.1); color: #166534; border: 1px solid rgba(34,197,94,0.2); }
-    .msg-warn { background: rgba(245,158,11,0.1); color: #92400e; border: 1px solid rgba(245,158,11,0.2); }
 
-    .team-section { padding: 5rem 2rem; position: relative; z-index: 1; }
-    .team-inner { max-width: 900px; margin: 0 auto; }
-    .team-header { text-align: center; margin-bottom: 3rem; }
-    .team-label { font-size: 0.7rem; letter-spacing: 3px; text-transform: uppercase; color: var(--deep-lav); font-weight: 500; margin-bottom: 0.6rem; }
-    .team-title { font-family: 'Playfair Display', serif; font-size: 2.4rem; font-weight: 900; color: var(--text); }
-    .team-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1.5rem; }
+    .msg-optimal {
+      background: rgba(34, 197, 94, 0.1);
+      color: #166534;
+      border: 1px solid rgba(34, 197, 94, 0.2);
+    }
+
+    .msg-warn {
+      background: rgba(245, 158, 11, 0.1);
+      color: #92400e;
+      border: 1px solid rgba(245, 158, 11, 0.2);
+    }
+
+    .team-section {
+      padding: 5rem 2rem;
+      position: relative;
+      z-index: 1;
+    }
+
+    .team-inner {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .team-header {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+
+    .team-label {
+      font-size: 0.7rem;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--deep-lav);
+      font-weight: 500;
+      margin-bottom: 0.6rem;
+    }
+
+    .team-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 2.4rem;
+      font-weight: 900;
+      color: var(--text);
+    }
+
+    .team-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1.5rem;
+    }
+
     .team-card {
       background: var(--glass-bg);
       backdrop-filter: blur(16px);
@@ -291,36 +683,94 @@
       box-shadow: var(--shadow);
       transition: transform 0.3s, box-shadow 0.3s;
     }
-    .team-card:hover { transform: translateY(-5px); box-shadow: 0 16px 40px rgba(93,74,158,0.15); }
+
+    .team-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 16px 40px rgba(93, 74, 158, 0.15);
+    }
+
     .team-avatar {
-      width: 60px; height: 60px;
+      width: 60px;
+      height: 60px;
       border-radius: 50%;
       background: linear-gradient(135deg, var(--deep-lav), var(--sky));
       margin: 0 auto 1rem;
-      display: flex; align-items: center; justify-content: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       font-family: 'Playfair Display', serif;
       font-size: 1.4rem;
       font-weight: 700;
       color: #fff;
     }
-    .team-name { font-weight: 500; font-size: 1rem; color: var(--text); margin-bottom: 0.25rem; }
-    .team-role { font-size: 0.8rem; color: var(--muted); }
 
-    .divider { height: 1px; background: linear-gradient(90deg, transparent, rgba(157,134,200,0.3), transparent); margin: 2rem 0; }
+    .team-name {
+      font-weight: 500;
+      font-size: 1rem;
+      color: var(--text);
+      margin-bottom: 0.25rem;
+    }
 
-    footer { position: relative; z-index: 1; padding: 1.5rem 3rem; border-top: 1px solid rgba(157,134,200,0.2); display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; color: var(--muted); }
-    footer .footer-logo { font-family: 'Playfair Display', serif; font-weight: 900; color: var(--indigo); }
+    .team-role {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
 
-    .error-msg { background: rgba(239,68,68,0.1); border: 1.5px solid rgba(239,68,68,0.25); border-radius: 12px; padding: 1rem 1.4rem; color: #7f1d1d; font-size: 0.9rem; margin-bottom: 1rem; display: none; }
-    .error-msg.visible { display: block; }
+    .divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(157, 134, 200, 0.3), transparent);
+      margin: 2rem 0;
+    }
 
-    @media(max-width:600px){
-      nav { padding: 0.8rem 1.2rem; }
-      .panel { padding: 1.5rem; }
-      .page { padding: 2rem 1rem 5rem; }
+    footer {
+      position: relative;
+      z-index: 1;
+      padding: 1.5rem 3rem;
+      border-top: 1px solid rgba(157, 134, 200, 0.2);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    footer .footer-logo {
+      font-family: 'Playfair Display', serif;
+      font-weight: 900;
+      color: var(--indigo);
+    }
+
+    .error-msg {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1.5px solid rgba(239, 68, 68, 0.25);
+      border-radius: 12px;
+      padding: 1rem 1.4rem;
+      color: #7f1d1d;
+      font-size: 0.9rem;
+      margin-bottom: 1rem;
+      display: none;
+    }
+
+    .error-msg.visible {
+      display: block;
+    }
+
+    @media(max-width:600px) {
+      nav {
+        padding: 0.8rem 1.2rem;
+      }
+
+      .panel {
+        padding: 1.5rem;
+      }
+
+      .page {
+        padding: 2rem 1rem 5rem;
+      }
     }
   </style>
 </head>
+
 <body>
 
   <div class="blob blob-1"></div>
@@ -356,19 +806,24 @@
         <div class="form-group">
           <label>Objective</label>
           <div class="radio-group">
-            <div class="radio-btn"><input type="radio" name="objective" id="objMax" value="max" checked><label for="objMax">Maximize</label></div>
-            <div class="radio-btn"><input type="radio" name="objective" id="objMin" value="min"><label for="objMin">Minimize</label></div>
+            <div class="radio-btn"><input type="radio" name="objective" id="objMax" value="max" checked><label
+                for="objMax">Maximize</label></div>
+            <div class="radio-btn"><input type="radio" name="objective" id="objMin" value="min"><label
+                for="objMin">Minimize</label></div>
           </div>
         </div>
         <div class="form-group">
           <label>Method</label>
           <div class="radio-group">
-            <div class="radio-btn"><input type="radio" name="method" id="mBigM" value="bigm" checked><label for="mBigM">Big-M</label></div>
-            <div class="radio-btn"><input type="radio" name="method" id="mTwo" value="twophase"><label for="mTwo">Two-Phase</label></div>
+            <div class="radio-btn"><input type="radio" name="method" id="mBigM" value="bigm" checked><label
+                for="mBigM">Big-M</label></div>
+            <div class="radio-btn"><input type="radio" name="method" id="mTwo" value="twophase"><label
+                for="mTwo">Two-Phase</label></div>
           </div>
         </div>
       </div>
-      <button class="btn-solve" id="btnGenerate" style="max-width:220px" onclick="generateForm()">Generate Input Fields →</button>
+      <button class="btn-solve" id="btnGenerate" style="max-width:220px" onclick="generateForm()">Generate Input Fields
+        →</button>
     </div>
 
     <div id="formArea" style="display:none">
@@ -376,8 +831,14 @@
         <div class="panel-title">Objective Function Coefficients</div>
         <div class="coeff-table-wrap">
           <table class="coeff-table">
-            <thead><tr id="objHeader"></tr></thead>
-            <tbody><tr id="objRow"><td class="row-label">Z&nbsp;=</td></tr></tbody>
+            <thead>
+              <tr id="objHeader"></tr>
+            </thead>
+            <tbody>
+              <tr id="objRow">
+                <td class="row-label">Z&nbsp;=</td>
+              </tr>
+            </tbody>
           </table>
         </div>
       </div>
@@ -391,7 +852,9 @@
         <div class="panel-title">Constraints</div>
         <div class="coeff-table-wrap">
           <table class="coeff-table">
-            <thead><tr id="conHeader"></tr></thead>
+            <thead>
+              <tr id="conHeader"></tr>
+            </thead>
             <tbody id="conBody"></tbody>
           </table>
         </div>
@@ -424,630 +887,630 @@
   </footer>
 
   <script>
-  // ============================================================
-  //  FRACTION CLASS  (self-contained, no CDN required)
-  //  Supports: new Frac(number), new Frac(numerator, denominator)
-  //  Operations: add, sub, mul, div, neg, abs, eq, lt, gt, lte, gte
-  //  Properties: n (abs numerator), d (denominator), s (sign: 1 or -1)
-  // ============================================================
-  (function(global) {
-    'use strict';
+    // ============================================================
+    //  FRACTION CLASS  (self-contained, no CDN required)
+    //  Supports: new Frac(number), new Frac(numerator, denominator)
+    //  Operations: add, sub, mul, div, neg, abs, eq, lt, gt, lte, gte
+    //  Properties: n (abs numerator), d (denominator), s (sign: 1 or -1)
+    // ============================================================
+    (function (global) {
+      'use strict';
 
-    function gcd(a, b) {
-      a = Math.abs(a); b = Math.abs(b);
-      while (b) { var t = b; b = a % b; a = t; }
-      return a;
-    }
-
-    function Frac(n, d) {
-      if (this === undefined || this === global) return new Frac(n, d);
-
-      if (n instanceof Frac) {
-        this.s = n.s; this.n = n.n; this.d = n.d;
-        return;
+      function gcd(a, b) {
+        a = Math.abs(a); b = Math.abs(b);
+        while (b) { var t = b; b = a % b; a = t; }
+        return a;
       }
 
-      if (d === undefined) {
-        // Single argument: number, string, or "p/q"
-        if (typeof n === 'string') {
-          var parts = n.split('/');
-          if (parts.length === 2) {
-            var num = parseInt(parts[0].trim(), 10);
-            var den = parseInt(parts[1].trim(), 10);
-            if (isNaN(num) || isNaN(den) || den === 0) throw new Error('Invalid fraction: ' + n);
-            n = num; d = den;
+      function Frac(n, d) {
+        if (this === undefined || this === global) return new Frac(n, d);
+
+        if (n instanceof Frac) {
+          this.s = n.s; this.n = n.n; this.d = n.d;
+          return;
+        }
+
+        if (d === undefined) {
+          // Single argument: number, string, or "p/q"
+          if (typeof n === 'string') {
+            var parts = n.split('/');
+            if (parts.length === 2) {
+              var num = parseInt(parts[0].trim(), 10);
+              var den = parseInt(parts[1].trim(), 10);
+              if (isNaN(num) || isNaN(den) || den === 0) throw new Error('Invalid fraction: ' + n);
+              n = num; d = den;
+            } else {
+              n = parseFloat(n);
+              if (isNaN(n)) throw new Error('Invalid fraction: ' + arguments[0]);
+              d = 1;
+            }
+          } else if (typeof n === 'number') {
+            // Handle decimals by converting to fraction
+            if (!isFinite(n)) throw new Error('Fraction does not support Infinity/NaN');
+            var str = n.toString();
+            var dot = str.indexOf('.');
+            if (dot !== -1) {
+              var dec = str.length - dot - 1;
+              d = Math.pow(10, dec);
+              n = Math.round(n * d);
+            } else {
+              d = 1;
+            }
           } else {
-            n = parseFloat(n);
-            if (isNaN(n)) throw new Error('Invalid fraction: ' + arguments[0]);
-            d = 1;
+            throw new Error('Invalid argument type for Fraction');
           }
-        } else if (typeof n === 'number') {
-          // Handle decimals by converting to fraction
-          if (!isFinite(n)) throw new Error('Fraction does not support Infinity/NaN');
-          var str = n.toString();
-          var dot = str.indexOf('.');
-          if (dot !== -1) {
-            var dec = str.length - dot - 1;
-            d = Math.pow(10, dec);
-            n = Math.round(n * d);
-          } else {
-            d = 1;
-          }
-        } else {
-          throw new Error('Invalid argument type for Fraction');
+        }
+
+        if (d === 0) throw new Error('Denominator cannot be zero');
+
+        var g = gcd(Math.abs(n), Math.abs(d));
+        var sign = (n < 0) !== (d < 0) ? -1 : 1;
+        this.s = sign;
+        this.n = Math.abs(n) / g;
+        this.d = Math.abs(d) / g;
+      }
+
+      Frac.prototype.toNumber = function () { return this.s * this.n / this.d; };
+      Frac.prototype.toString = function () {
+        if (this.d === 1) return String(this.s * this.n);
+        return (this.s * this.n) + '/' + this.d;
+      };
+
+      Frac.prototype.add = function (o) {
+        o = new Frac(o);
+        return new Frac(this.s * this.n * o.d + o.s * o.n * this.d, this.d * o.d);
+      };
+      Frac.prototype.sub = function (o) {
+        o = new Frac(o);
+        return new Frac(this.s * this.n * o.d - o.s * o.n * this.d, this.d * o.d);
+      };
+      Frac.prototype.mul = function (o) {
+        o = new Frac(o);
+        return new Frac(this.s * this.n * o.s * o.n, this.d * o.d);
+      };
+      Frac.prototype.div = function (o) {
+        o = new Frac(o);
+        if (o.n === 0) throw new Error('Division by zero');
+        return new Frac(this.s * this.n * o.s * o.d, this.d * o.n);
+      };
+      Frac.prototype.neg = function () { return new Frac(-this.s * this.n, this.d); };
+      Frac.prototype.abs = function () { return new Frac(this.n, this.d); };
+      Frac.prototype.eq = function (o) { o = new Frac(o); return this.s * this.n * o.d === o.s * o.n * this.d; };
+      Frac.prototype.lt = function (o) { o = new Frac(o); return this.s * this.n * o.d < o.s * o.n * this.d; };
+      Frac.prototype.gt = function (o) { o = new Frac(o); return this.s * this.n * o.d > o.s * o.n * this.d; };
+      Frac.prototype.lte = function (o) { o = new Frac(o); return this.s * this.n * o.d <= o.s * o.n * this.d; };
+      Frac.prototype.gte = function (o) { o = new Frac(o); return this.s * this.n * o.d >= o.s * o.n * this.d; };
+
+      // Expose globally as both "Fraction" (original code compat) and "Frac"
+      global.Fraction = Frac;
+      global.Frac = Frac;
+    })(window);
+
+
+    // ============================================================
+    //  SIMPLEX ENGINE  (formerly simplex.js — now inlined)
+    // ============================================================
+
+    /**
+     * fmt(val) — display a Fraction (or number) as a clean string.
+     * Fraction.s = sign (-1 or 1), Fraction.n = abs numerator, Fraction.d = denominator.
+     */
+    function fmt(val) {
+      try {
+        var f = (val instanceof Fraction) ? val : new Fraction(val);
+        var num = f.s * f.n;
+        return f.d === 1 ? String(num) : num + '/' + f.d;
+      } catch (e) { return String(val); }
+    }
+
+    /** frac(v) — safely convert any input to a Fraction */
+    function frac(v) {
+      if (v instanceof Fraction) return v;
+      return new Fraction(v);
+    }
+
+    const BIG_M = 1e6; // Used symbolically; stored as a Fraction for arithmetic
+
+    /**
+     * Main solver entry point.
+     * @param {Object} p
+     *   p.obj         – array of JS numbers (objective coefficients, already sign-adjusted)
+     *   p.constraints – array of rows (each row = array of JS numbers)
+     *   p.signs       – array of '<=', '>=', '='
+     *   p.rhs         – array of JS numbers (non-negative after caller's flip)
+     *   p.choice      – 'max' | 'min'
+     *   p.numVars     – number of original decision variables
+     *   p.numCons     – number of constraints
+     *   p.method      – 'bigm' | 'twophase'
+     */
+    function solve(p) {
+      var obj = p.obj.map(frac);
+      var A = p.constraints.map(function (row) { return row.map(frac); });
+      var b = p.rhs.map(frac);
+      var signs = p.signs;
+      var nv = p.numVars;
+      var nc = p.numCons;
+      var method = p.method || 'bigm';
+      var isMin = p.choice === 'min';
+
+      // For minimisation, negate objective → maximise −z
+      if (isMin) obj = obj.map(function (c) { return c.neg(); });
+
+      // ── Build augmented tableau ───────────────────────────────
+      // Columns: [x1..xn | slacks | artificials | RHS]
+      // We track column names and which are artificial.
+
+      var colNames = [];
+      for (var i = 0; i < nv; i++) colNames.push('x' + (i + 1));
+
+      var slackCount = 0, artCount = 0;
+      var slackCols = [];  // {row, col, coeff: +1/-1}
+      var artCols = [];  // {row, col}
+
+      // First pass: count slacks and artificials
+      for (var r = 0; r < nc; r++) {
+        var sg = signs[r];
+        if (sg === '<=') {
+          slackCols.push({ row: r, coeff: 1 });
+          slackCount++;
+        } else if (sg === '>=') {
+          slackCols.push({ row: r, coeff: -1 }); // surplus
+          slackCount++;
+          artCols.push({ row: r });
+          artCount++;
+        } else { // '='
+          artCols.push({ row: r });
+          artCount++;
         }
       }
 
-      if (d === 0) throw new Error('Denominator cannot be zero');
+      // Assign column indices
+      var slackStart = nv;
+      var artStart = nv + slackCount;
+      var totalCols = nv + slackCount + artCount; // excluding RHS
+      var RHS = totalCols; // index of RHS column
 
-      var g = gcd(Math.abs(n), Math.abs(d));
-      var sign = (n < 0) !== (d < 0) ? -1 : 1;
-      this.s = sign;
-      this.n = Math.abs(n) / g;
-      this.d = Math.abs(d) / g;
-    }
+      // Column names for slacks and artificials
+      for (var k = 0; k < slackCount; k++) colNames.push('s' + (k + 1));
+      for (var k = 0; k < artCount; k++) colNames.push('a' + (k + 1));
+      colNames.push('RHS');
 
-    Frac.prototype.toNumber = function() { return this.s * this.n / this.d; };
-    Frac.prototype.toString = function() {
-      if (this.d === 1) return String(this.s * this.n);
-      return (this.s * this.n) + '/' + this.d;
-    };
-
-    Frac.prototype.add = function(o) {
-      o = new Frac(o);
-      return new Frac(this.s * this.n * o.d + o.s * o.n * this.d, this.d * o.d);
-    };
-    Frac.prototype.sub = function(o) {
-      o = new Frac(o);
-      return new Frac(this.s * this.n * o.d - o.s * o.n * this.d, this.d * o.d);
-    };
-    Frac.prototype.mul = function(o) {
-      o = new Frac(o);
-      return new Frac(this.s * this.n * o.s * o.n, this.d * o.d);
-    };
-    Frac.prototype.div = function(o) {
-      o = new Frac(o);
-      if (o.n === 0) throw new Error('Division by zero');
-      return new Frac(this.s * this.n * o.s * o.d, this.d * o.n);
-    };
-    Frac.prototype.neg = function() { return new Frac(-this.s * this.n, this.d); };
-    Frac.prototype.abs = function() { return new Frac(this.n, this.d); };
-    Frac.prototype.eq  = function(o) { o = new Frac(o); return this.s*this.n*o.d === o.s*o.n*this.d; };
-    Frac.prototype.lt  = function(o) { o = new Frac(o); return this.s*this.n*o.d <  o.s*o.n*this.d; };
-    Frac.prototype.gt  = function(o) { o = new Frac(o); return this.s*this.n*o.d >  o.s*o.n*this.d; };
-    Frac.prototype.lte = function(o) { o = new Frac(o); return this.s*this.n*o.d <= o.s*o.n*this.d; };
-    Frac.prototype.gte = function(o) { o = new Frac(o); return this.s*this.n*o.d >= o.s*o.n*this.d; };
-
-    // Expose globally as both "Fraction" (original code compat) and "Frac"
-    global.Fraction = Frac;
-    global.Frac = Frac;
-  })(window);
-
-
-  // ============================================================
-  //  SIMPLEX ENGINE  (formerly simplex.js — now inlined)
-  // ============================================================
-
-  /**
-   * fmt(val) — display a Fraction (or number) as a clean string.
-   * Fraction.s = sign (-1 or 1), Fraction.n = abs numerator, Fraction.d = denominator.
-   */
-  function fmt(val) {
-    try {
-      var f = (val instanceof Fraction) ? val : new Fraction(val);
-      var num = f.s * f.n;
-      return f.d === 1 ? String(num) : num + '/' + f.d;
-    } catch(e) { return String(val); }
-  }
-
-  /** frac(v) — safely convert any input to a Fraction */
-  function frac(v) {
-    if (v instanceof Fraction) return v;
-    return new Fraction(v);
-  }
-
-  const BIG_M = 1e6; // Used symbolically; stored as a Fraction for arithmetic
-
-  /**
-   * Main solver entry point.
-   * @param {Object} p
-   *   p.obj         – array of JS numbers (objective coefficients, already sign-adjusted)
-   *   p.constraints – array of rows (each row = array of JS numbers)
-   *   p.signs       – array of '<=', '>=', '='
-   *   p.rhs         – array of JS numbers (non-negative after caller's flip)
-   *   p.choice      – 'max' | 'min'
-   *   p.numVars     – number of original decision variables
-   *   p.numCons     – number of constraints
-   *   p.method      – 'bigm' | 'twophase'
-   */
-  function solve(p) {
-    var obj = p.obj.map(frac);
-    var A   = p.constraints.map(function(row){ return row.map(frac); });
-    var b   = p.rhs.map(frac);
-    var signs = p.signs;
-    var nv  = p.numVars;
-    var nc  = p.numCons;
-    var method = p.method || 'bigm';
-    var isMin = p.choice === 'min';
-
-    // For minimisation, negate objective → maximise −z
-    if (isMin) obj = obj.map(function(c){ return c.neg(); });
-
-    // ── Build augmented tableau ───────────────────────────────
-    // Columns: [x1..xn | slacks | artificials | RHS]
-    // We track column names and which are artificial.
-
-    var colNames = [];
-    for (var i = 0; i < nv; i++) colNames.push('x' + (i+1));
-
-    var slackCount = 0, artCount = 0;
-    var slackCols  = [];  // {row, col, coeff: +1/-1}
-    var artCols    = [];  // {row, col}
-
-    // First pass: count slacks and artificials
-    for (var r = 0; r < nc; r++) {
-      var sg = signs[r];
-      if (sg === '<=') {
-        slackCols.push({row: r, coeff: 1});
-        slackCount++;
-      } else if (sg === '>=') {
-        slackCols.push({row: r, coeff: -1}); // surplus
-        slackCount++;
-        artCols.push({row: r});
-        artCount++;
-      } else { // '='
-        artCols.push({row: r});
-        artCount++;
+      var notes = [];
+      for (var k = 0; k < slackCount; k++) {
+        notes.push('s' + (k + 1) + ' = slack/surplus variable for constraint ' + (k + 1));
       }
-    }
-
-    // Assign column indices
-    var slackStart = nv;
-    var artStart   = nv + slackCount;
-    var totalCols  = nv + slackCount + artCount; // excluding RHS
-    var RHS        = totalCols; // index of RHS column
-
-    // Column names for slacks and artificials
-    for (var k = 0; k < slackCount; k++) colNames.push('s' + (k+1));
-    for (var k = 0; k < artCount;   k++) colNames.push('a' + (k+1));
-    colNames.push('RHS');
-
-    var notes = [];
-    for (var k = 0; k < slackCount; k++) {
-      notes.push('s' + (k+1) + ' = slack/surplus variable for constraint ' + (k+1));
-    }
-    for (var k = 0; k < artCount; k++) {
-      notes.push('a' + (k+1) + ' = artificial variable (≥ or = constraint)');
-    }
-
-    // Tableau rows: row 0 = objective row, rows 1..nc = constraints
-    // Each row has (totalCols+1) entries [col0..colN, RHS]
-    var TAB = [];
-    for (var r = 0; r <= nc; r++) {
-      var row = [];
-      for (var c = 0; c <= totalCols; c++) row.push(frac(0));
-      TAB.push(row);
-    }
-
-    // Fill constraint rows
-    var sIdx = slackStart, aIdx = artStart;
-    for (var r = 0; r < nc; r++) {
-      for (var c = 0; c < nv; c++) TAB[r+1][c] = A[r][c];
-      TAB[r+1][RHS] = b[r];
-
-      var sg = signs[r];
-      if (sg === '<=') {
-        TAB[r+1][sIdx] = frac(1);
-        sIdx++;
-      } else if (sg === '>=') {
-        TAB[r+1][sIdx] = frac(-1); // surplus
-        TAB[r+1][aIdx] = frac(1);  // artificial
-        sIdx++; aIdx++;
-      } else { // '='
-        TAB[r+1][aIdx] = frac(1);
-        aIdx++;
+      for (var k = 0; k < artCount; k++) {
+        notes.push('a' + (k + 1) + ' = artificial variable (≥ or = constraint)');
       }
-    }
 
-    // Basis: initially slacks or artificials
-    var basis = []; // basis[r] = column index for constraint row r+1
-    sIdx = slackStart; aIdx = artStart;
-    for (var r = 0; r < nc; r++) {
-      var sg = signs[r];
-      if (sg === '<=') {
-        basis.push(sIdx++);
-      } else if (sg === '>=') {
-        sIdx++; // surplus not in basis
-        basis.push(aIdx++);
+      // Tableau rows: row 0 = objective row, rows 1..nc = constraints
+      // Each row has (totalCols+1) entries [col0..colN, RHS]
+      var TAB = [];
+      for (var r = 0; r <= nc; r++) {
+        var row = [];
+        for (var c = 0; c <= totalCols; c++) row.push(frac(0));
+        TAB.push(row);
+      }
+
+      // Fill constraint rows
+      var sIdx = slackStart, aIdx = artStart;
+      for (var r = 0; r < nc; r++) {
+        for (var c = 0; c < nv; c++) TAB[r + 1][c] = A[r][c];
+        TAB[r + 1][RHS] = b[r];
+
+        var sg = signs[r];
+        if (sg === '<=') {
+          TAB[r + 1][sIdx] = frac(1);
+          sIdx++;
+        } else if (sg === '>=') {
+          TAB[r + 1][sIdx] = frac(-1); // surplus
+          TAB[r + 1][aIdx] = frac(1);  // artificial
+          sIdx++; aIdx++;
+        } else { // '='
+          TAB[r + 1][aIdx] = frac(1);
+          aIdx++;
+        }
+      }
+
+      // Basis: initially slacks or artificials
+      var basis = []; // basis[r] = column index for constraint row r+1
+      sIdx = slackStart; aIdx = artStart;
+      for (var r = 0; r < nc; r++) {
+        var sg = signs[r];
+        if (sg === '<=') {
+          basis.push(sIdx++);
+        } else if (sg === '>=') {
+          sIdx++; // surplus not in basis
+          basis.push(aIdx++);
+        } else {
+          basis.push(aIdx++);
+        }
+      }
+
+      // Set of artificial column indices
+      var artSet = new Set();
+      for (var c = artStart; c < artStart + artCount; c++) artSet.add(c);
+
+      var steps = [];
+
+      if (method === 'twophase') {
+        return solvetwophase(TAB, basis, obj, nv, nc, totalCols, RHS, artSet, artStart, artCount, slackStart, slackCount, colNames, notes, isMin, p.choice);
       } else {
-        basis.push(aIdx++);
+        return solveBigM(TAB, basis, obj, nv, nc, totalCols, RHS, artSet, artStart, artCount, colNames, notes, isMin, p.choice);
       }
     }
 
-    // Set of artificial column indices
-    var artSet = new Set();
-    for (var c = artStart; c < artStart + artCount; c++) artSet.add(c);
+    // ── Big-M method ────────────────────────────────────────────
 
-    var steps = [];
+    function solveBigM(TAB, basis, obj, nv, nc, totalCols, RHS, artSet, artStart, artCount, colNames, notes, isMin, choice) {
+      var M = frac(BIG_M);
+      var steps = [];
 
-    if (method === 'twophase') {
-      return solvetwophase(TAB, basis, obj, nv, nc, totalCols, RHS, artSet, artStart, artCount, slackStart, slackCount, colNames, notes, isMin, p.choice);
-    } else {
-      return solveBigM(TAB, basis, obj, nv, nc, totalCols, RHS, artSet, artStart, artCount, colNames, notes, isMin, p.choice);
-    }
-  }
-
-  // ── Big-M method ────────────────────────────────────────────
-
-  function solveBigM(TAB, basis, obj, nv, nc, totalCols, RHS, artSet, artStart, artCount, colNames, notes, isMin, choice) {
-    var M = frac(BIG_M);
-    var steps = [];
-
-    // Build Z row: negate objective (max form), add M * artificials
-    for (var c = 0; c < nv; c++) {
-      TAB[0][c] = obj[c].neg();
-    }
-    for (var c = artStart; c < artStart + artCount; c++) {
-      TAB[0][c] = M;
-    }
-
-    // Eliminate artificials from Z row using current basis rows
-    for (var r = 0; r < nc; r++) {
-      if (artSet.has(basis[r])) {
-        var artCol = basis[r];
-        var coeff = TAB[0][artCol]; // should be M
-        for (var c = 0; c <= totalCols; c++) {
-          TAB[0][c] = TAB[0][c].sub(coeff.mul(TAB[r+1][c]));
-        }
+      // Build Z row: negate objective (max form), add M * artificials
+      for (var c = 0; c < nv; c++) {
+        TAB[0][c] = obj[c].neg();
       }
-    }
+      for (var c = artStart; c < artStart + artCount; c++) {
+        TAB[0][c] = M;
+      }
 
-    var iteration = 0;
-    var MAX_ITER = 200;
-
-    while (iteration < MAX_ITER) {
-      // Find entering variable: most negative Z-row coefficient (excluding RHS)
-      var pivotCol = -1;
-      var mostNeg = frac(0);
-      for (var c = 0; c < totalCols; c++) {
-        if (TAB[0][c].lt(mostNeg)) {
-          mostNeg = TAB[0][c];
-          pivotCol = c;
+      // Eliminate artificials from Z row using current basis rows
+      for (var r = 0; r < nc; r++) {
+        if (artSet.has(basis[r])) {
+          var artCol = basis[r];
+          var coeff = TAB[0][artCol]; // should be M
+          for (var c = 0; c <= totalCols; c++) {
+            TAB[0][c] = TAB[0][c].sub(coeff.mul(TAB[r + 1][c]));
+          }
         }
       }
 
-      if (pivotCol === -1) {
-        // Optimal
-        var snap = snapshotTableau(TAB, basis, colNames, nc, totalCols, RHS, -1, -1, null, true);
-        steps.push({ type:'optimal', iteration: iteration, label:'Big-M', message:'All reduced costs ≥ 0. Optimal tableau.', tableau: snap.tab, basics: snap.bas, colNames: colNames.slice() });
+      var iteration = 0;
+      var MAX_ITER = 200;
 
-        // Check infeasibility: any artificial still in basis with value > 0?
-        for (var r = 0; r < nc; r++) {
-          if (artSet.has(basis[r]) && TAB[r+1][RHS].gt(frac(0))) {
-            return { status:'infeasible', steps, notes, solution: null };
+      while (iteration < MAX_ITER) {
+        // Find entering variable: most negative Z-row coefficient (excluding RHS)
+        var pivotCol = -1;
+        var mostNeg = frac(0);
+        for (var c = 0; c < totalCols; c++) {
+          if (TAB[0][c].lt(mostNeg)) {
+            mostNeg = TAB[0][c];
+            pivotCol = c;
           }
         }
 
-        return buildSolution(TAB, basis, colNames, obj, choice, nv, nc, totalCols, RHS, steps, notes, isMin, artSet);
+        if (pivotCol === -1) {
+          // Optimal
+          var snap = snapshotTableau(TAB, basis, colNames, nc, totalCols, RHS, -1, -1, null, true);
+          steps.push({ type: 'optimal', iteration: iteration, label: 'Big-M', message: 'All reduced costs ≥ 0. Optimal tableau.', tableau: snap.tab, basics: snap.bas, colNames: colNames.slice() });
+
+          // Check infeasibility: any artificial still in basis with value > 0?
+          for (var r = 0; r < nc; r++) {
+            if (artSet.has(basis[r]) && TAB[r + 1][RHS].gt(frac(0))) {
+              return { status: 'infeasible', steps, notes, solution: null };
+            }
+          }
+
+          return buildSolution(TAB, basis, colNames, obj, choice, nv, nc, totalCols, RHS, steps, notes, isMin, artSet);
+        }
+
+        // Minimum ratio test
+        var pivotRow = -1;
+        var minRatio = null;
+        var ratios = new Array(nc).fill(undefined);
+
+        for (var r = 1; r <= nc; r++) {
+          var elem = TAB[r][pivotCol];
+          if (elem.gt(frac(0))) {
+            var ratio = TAB[r][RHS].div(elem);
+            ratios[r - 1] = fmt(ratio);
+            if (minRatio === null || ratio.lt(minRatio)) {
+              minRatio = ratio;
+              pivotRow = r;
+            }
+          } else {
+            ratios[r - 1] = '—';
+          }
+        }
+
+        if (pivotRow === -1) {
+          steps.push({ type: 'unbounded', message: 'No positive elements in pivot column. Problem is unbounded.' });
+          return { status: 'unbounded', steps, notes, solution: null };
+        }
+
+        var pivotVal = TAB[pivotRow][pivotCol];
+        var isArtLeaving = artSet.has(basis[pivotRow - 1]);
+
+        var snap = snapshotTableau(TAB, basis, colNames, nc, totalCols, RHS, pivotCol, pivotRow, ratios, false);
+        steps.push({
+          type: 'pivot', iteration: iteration + 1, label: 'Big-M',
+          entering: colNames[pivotCol], leaving: colNames[basis[pivotRow - 1]],
+          isArtLeaving, pivotVal: fmt(pivotVal),
+          tableau: snap.tab, basics: snap.bas, colNames: colNames.slice(), ratios
+        });
+
+        // Pivot
+        pivot(TAB, basis, pivotRow, pivotCol, nc, totalCols, RHS);
+        iteration++;
       }
 
-      // Minimum ratio test
-      var pivotRow = -1;
-      var minRatio = null;
-      var ratios = new Array(nc).fill(undefined);
+      steps.push({ type: 'infeasible', message: 'Maximum iterations reached.' });
+      return { status: 'infeasible', steps, notes, solution: null };
+    }
 
-      for (var r = 1; r <= nc; r++) {
-        var elem = TAB[r][pivotCol];
-        if (elem.gt(frac(0))) {
-          var ratio = TAB[r][RHS].div(elem);
-          ratios[r-1] = fmt(ratio);
-          if (minRatio === null || ratio.lt(minRatio)) {
-            minRatio = ratio;
-            pivotRow = r;
+    // ── Two-Phase method ────────────────────────────────────────
+
+    function solvetwophase(TAB, basis, obj, nv, nc, totalCols, RHS, artSet, artStart, artCount, slackStart, slackCount, colNames, notes, isMin, choice) {
+      var steps = [];
+
+      if (artCount === 0) {
+        // No artificials — skip Phase 1, go straight to Phase 2
+        return runPhase2(TAB, basis, obj, nv, nc, totalCols, RHS, artSet, colNames, notes, isMin, choice, steps);
+      }
+
+      // ── Phase 1: minimise sum of artificials ──
+      // Phase 1 Z row: 0 for original/slack vars, 1 for artificials
+      for (var c = 0; c <= totalCols; c++) TAB[0][c] = frac(0);
+      for (var c = artStart; c < artStart + artCount; c++) TAB[0][c] = frac(-1); // we maximise −(sum art)
+
+      // Eliminate artificials from Z row
+      for (var r = 0; r < nc; r++) {
+        if (artSet.has(basis[r])) {
+          var coeff = TAB[0][basis[r]];
+          for (var c = 0; c <= totalCols; c++) {
+            TAB[0][c] = TAB[0][c].sub(coeff.mul(TAB[r + 1][c]));
           }
-        } else {
-          ratios[r-1] = '—';
         }
       }
 
-      if (pivotRow === -1) {
-        steps.push({ type:'unbounded', message:'No positive elements in pivot column. Problem is unbounded.' });
-        return { status:'unbounded', steps, notes, solution: null };
+      var iteration = 0;
+      var MAX_ITER = 200;
+
+      while (iteration < MAX_ITER) {
+        var pivotCol = -1;
+        var mostNeg = frac(0);
+        for (var c = 0; c < totalCols; c++) {
+          if (TAB[0][c].lt(mostNeg)) {
+            mostNeg = TAB[0][c];
+            pivotCol = c;
+          }
+        }
+
+        if (pivotCol === -1) {
+          // Phase 1 optimal
+          var snap = snapshotTableau(TAB, basis, colNames, nc, totalCols, RHS, -1, -1, null, true);
+          steps.push({ type: 'optimal', iteration: iteration, label: 'Phase 1', message: 'Phase 1 complete.', tableau: snap.tab, basics: snap.bas, colNames: colNames.slice() });
+
+          // Check: if Phase 1 objective ≠ 0, infeasible
+          if (TAB[0][RHS].abs().gt(frac(1e-9))) {
+            steps.push({ type: 'infeasible', message: 'Phase 1 objective > 0: problem is infeasible.' });
+            return { status: 'infeasible', steps, notes, solution: null };
+          }
+          break;
+        }
+
+        var pivotRow = -1, minRatio = null;
+        var ratios = new Array(nc).fill(undefined);
+        for (var r = 1; r <= nc; r++) {
+          var elem = TAB[r][pivotCol];
+          if (elem.gt(frac(0))) {
+            var ratio = TAB[r][RHS].div(elem);
+            ratios[r - 1] = fmt(ratio);
+            if (minRatio === null || ratio.lt(minRatio)) { minRatio = ratio; pivotRow = r; }
+          } else { ratios[r - 1] = '—'; }
+        }
+
+        if (pivotRow === -1) {
+          steps.push({ type: 'unbounded', message: 'Unbounded in Phase 1 (should not happen).' });
+          return { status: 'infeasible', steps, notes, solution: null };
+        }
+
+        var pivotVal = TAB[pivotRow][pivotCol];
+        var isArtLeaving = artSet.has(basis[pivotRow - 1]);
+        var snap = snapshotTableau(TAB, basis, colNames, nc, totalCols, RHS, pivotCol, pivotRow, ratios, false);
+        steps.push({
+          type: 'pivot', iteration: iteration + 1, label: 'Phase 1',
+          entering: colNames[pivotCol], leaving: colNames[basis[pivotRow - 1]],
+          isArtLeaving, pivotVal: fmt(pivotVal),
+          tableau: snap.tab, basics: snap.bas, colNames: colNames.slice(), ratios
+        });
+
+        pivot(TAB, basis, pivotRow, pivotCol, nc, totalCols, RHS);
+        iteration++;
       }
 
-      var pivotVal = TAB[pivotRow][pivotCol];
-      var isArtLeaving = artSet.has(basis[pivotRow - 1]);
-
-      var snap = snapshotTableau(TAB, basis, colNames, nc, totalCols, RHS, pivotCol, pivotRow, ratios, false);
-      steps.push({
-        type: 'pivot', iteration: iteration + 1, label: 'Big-M',
-        entering: colNames[pivotCol], leaving: colNames[basis[pivotRow-1]],
-        isArtLeaving, pivotVal: fmt(pivotVal),
-        tableau: snap.tab, basics: snap.bas, colNames: colNames.slice(), ratios
-      });
-
-      // Pivot
-      pivot(TAB, basis, pivotRow, pivotCol, nc, totalCols, RHS);
-      iteration++;
-    }
-
-    steps.push({ type:'infeasible', message:'Maximum iterations reached.' });
-    return { status:'infeasible', steps, notes, solution: null };
-  }
-
-  // ── Two-Phase method ────────────────────────────────────────
-
-  function solvetwophase(TAB, basis, obj, nv, nc, totalCols, RHS, artSet, artStart, artCount, slackStart, slackCount, colNames, notes, isMin, choice) {
-    var steps = [];
-
-    if (artCount === 0) {
-      // No artificials — skip Phase 1, go straight to Phase 2
+      // ── Phase 2 ──
       return runPhase2(TAB, basis, obj, nv, nc, totalCols, RHS, artSet, colNames, notes, isMin, choice, steps);
     }
 
-    // ── Phase 1: minimise sum of artificials ──
-    // Phase 1 Z row: 0 for original/slack vars, 1 for artificials
-    for (var c = 0; c <= totalCols; c++) TAB[0][c] = frac(0);
-    for (var c = artStart; c < artStart + artCount; c++) TAB[0][c] = frac(-1); // we maximise −(sum art)
+    function runPhase2(TAB, basis, obj, nv, nc, totalCols, RHS, artSet, colNames, notes, isMin, choice, steps) {
+      // Restore Phase 2 objective row
+      for (var c = 0; c <= totalCols; c++) TAB[0][c] = frac(0);
+      for (var c = 0; c < nv; c++) TAB[0][c] = obj[c].neg();
 
-    // Eliminate artificials from Z row
-    for (var r = 0; r < nc; r++) {
-      if (artSet.has(basis[r])) {
-        var coeff = TAB[0][basis[r]];
-        for (var c = 0; c <= totalCols; c++) {
-          TAB[0][c] = TAB[0][c].sub(coeff.mul(TAB[r+1][c]));
-        }
-      }
-    }
+      // Zero out artificial columns in Z row (they're driven out)
+      for (var c of artSet) TAB[0][c] = frac(0);
 
-    var iteration = 0;
-    var MAX_ITER = 200;
-
-    while (iteration < MAX_ITER) {
-      var pivotCol = -1;
-      var mostNeg = frac(0);
-      for (var c = 0; c < totalCols; c++) {
-        if (TAB[0][c].lt(mostNeg)) {
-          mostNeg = TAB[0][c];
-          pivotCol = c;
+      // Eliminate basic variables from Z row
+      for (var r = 0; r < nc; r++) {
+        var bCol = basis[r];
+        var coeff = TAB[0][bCol];
+        if (!coeff.eq(frac(0))) {
+          for (var c = 0; c <= totalCols; c++) {
+            TAB[0][c] = TAB[0][c].sub(coeff.mul(TAB[r + 1][c]));
+          }
         }
       }
 
-      if (pivotCol === -1) {
-        // Phase 1 optimal
-        var snap = snapshotTableau(TAB, basis, colNames, nc, totalCols, RHS, -1, -1, null, true);
-        steps.push({ type:'optimal', iteration: iteration, label:'Phase 1', message:'Phase 1 complete.', tableau: snap.tab, basics: snap.bas, colNames: colNames.slice() });
+      var iteration = 0;
+      var MAX_ITER = 200;
 
-        // Check: if Phase 1 objective ≠ 0, infeasible
-        if (TAB[0][RHS].abs().gt(frac(1e-9))) {
-          steps.push({ type:'infeasible', message:'Phase 1 objective > 0: problem is infeasible.' });
-          return { status:'infeasible', steps, notes, solution: null };
+      while (iteration < MAX_ITER) {
+        // Find entering: most negative in Z row (skip artificial cols)
+        var pivotCol = -1, mostNeg = frac(0);
+        for (var c = 0; c < totalCols; c++) {
+          if (!artSet.has(c) && TAB[0][c].lt(mostNeg)) {
+            mostNeg = TAB[0][c];
+            pivotCol = c;
+          }
         }
-        break;
-      }
 
-      var pivotRow = -1, minRatio = null;
-      var ratios = new Array(nc).fill(undefined);
-      for (var r = 1; r <= nc; r++) {
-        var elem = TAB[r][pivotCol];
-        if (elem.gt(frac(0))) {
-          var ratio = TAB[r][RHS].div(elem);
-          ratios[r-1] = fmt(ratio);
-          if (minRatio === null || ratio.lt(minRatio)) { minRatio = ratio; pivotRow = r; }
-        } else { ratios[r-1] = '—'; }
-      }
-
-      if (pivotRow === -1) {
-        steps.push({ type:'unbounded', message:'Unbounded in Phase 1 (should not happen).' });
-        return { status:'infeasible', steps, notes, solution: null };
-      }
-
-      var pivotVal = TAB[pivotRow][pivotCol];
-      var isArtLeaving = artSet.has(basis[pivotRow-1]);
-      var snap = snapshotTableau(TAB, basis, colNames, nc, totalCols, RHS, pivotCol, pivotRow, ratios, false);
-      steps.push({
-        type:'pivot', iteration: iteration+1, label:'Phase 1',
-        entering: colNames[pivotCol], leaving: colNames[basis[pivotRow-1]],
-        isArtLeaving, pivotVal: fmt(pivotVal),
-        tableau: snap.tab, basics: snap.bas, colNames: colNames.slice(), ratios
-      });
-
-      pivot(TAB, basis, pivotRow, pivotCol, nc, totalCols, RHS);
-      iteration++;
-    }
-
-    // ── Phase 2 ──
-    return runPhase2(TAB, basis, obj, nv, nc, totalCols, RHS, artSet, colNames, notes, isMin, choice, steps);
-  }
-
-  function runPhase2(TAB, basis, obj, nv, nc, totalCols, RHS, artSet, colNames, notes, isMin, choice, steps) {
-    // Restore Phase 2 objective row
-    for (var c = 0; c <= totalCols; c++) TAB[0][c] = frac(0);
-    for (var c = 0; c < nv; c++) TAB[0][c] = obj[c].neg();
-
-    // Zero out artificial columns in Z row (they're driven out)
-    for (var c of artSet) TAB[0][c] = frac(0);
-
-    // Eliminate basic variables from Z row
-    for (var r = 0; r < nc; r++) {
-      var bCol = basis[r];
-      var coeff = TAB[0][bCol];
-      if (!coeff.eq(frac(0))) {
-        for (var c = 0; c <= totalCols; c++) {
-          TAB[0][c] = TAB[0][c].sub(coeff.mul(TAB[r+1][c]));
+        if (pivotCol === -1) {
+          var snap = snapshotTableau(TAB, basis, colNames, nc, totalCols, RHS, -1, -1, null, true);
+          steps.push({ type: 'optimal', iteration: iteration, label: 'Phase 2', message: 'All reduced costs ≥ 0. Optimal.', tableau: snap.tab, basics: snap.bas, colNames: colNames.slice() });
+          return buildSolution(TAB, basis, colNames, obj, choice, nv, nc, totalCols, RHS, steps, notes, isMin, artSet);
         }
-      }
-    }
 
-    var iteration = 0;
-    var MAX_ITER = 200;
-
-    while (iteration < MAX_ITER) {
-      // Find entering: most negative in Z row (skip artificial cols)
-      var pivotCol = -1, mostNeg = frac(0);
-      for (var c = 0; c < totalCols; c++) {
-        if (!artSet.has(c) && TAB[0][c].lt(mostNeg)) {
-          mostNeg = TAB[0][c];
-          pivotCol = c;
+        var pivotRow = -1, minRatio = null;
+        var ratios = new Array(nc).fill(undefined);
+        for (var r = 1; r <= nc; r++) {
+          var elem = TAB[r][pivotCol];
+          if (elem.gt(frac(0))) {
+            var ratio = TAB[r][RHS].div(elem);
+            ratios[r - 1] = fmt(ratio);
+            if (minRatio === null || ratio.lt(minRatio)) { minRatio = ratio; pivotRow = r; }
+          } else { ratios[r - 1] = '—'; }
         }
+
+        if (pivotRow === -1) {
+          steps.push({ type: 'unbounded', message: 'No positive elements in pivot column. Unbounded.' });
+          return { status: 'unbounded', steps, notes, solution: null };
+        }
+
+        var pivotVal = TAB[pivotRow][pivotCol];
+        var isArtLeaving = artSet.has(basis[pivotRow - 1]);
+        var snap = snapshotTableau(TAB, basis, colNames, nc, totalCols, RHS, pivotCol, pivotRow, ratios, false);
+        steps.push({
+          type: 'pivot', iteration: iteration + 1, label: 'Phase 2',
+          entering: colNames[pivotCol], leaving: colNames[basis[pivotRow - 1]],
+          isArtLeaving, pivotVal: fmt(pivotVal),
+          tableau: snap.tab, basics: snap.bas, colNames: colNames.slice(), ratios
+        });
+
+        pivot(TAB, basis, pivotRow, pivotCol, nc, totalCols, RHS);
+        iteration++;
       }
 
-      if (pivotCol === -1) {
-        var snap = snapshotTableau(TAB, basis, colNames, nc, totalCols, RHS, -1, -1, null, true);
-        steps.push({ type:'optimal', iteration: iteration, label:'Phase 2', message:'All reduced costs ≥ 0. Optimal.', tableau: snap.tab, basics: snap.bas, colNames: colNames.slice() });
-        return buildSolution(TAB, basis, colNames, obj, choice, nv, nc, totalCols, RHS, steps, notes, isMin, artSet);
-      }
-
-      var pivotRow = -1, minRatio = null;
-      var ratios = new Array(nc).fill(undefined);
-      for (var r = 1; r <= nc; r++) {
-        var elem = TAB[r][pivotCol];
-        if (elem.gt(frac(0))) {
-          var ratio = TAB[r][RHS].div(elem);
-          ratios[r-1] = fmt(ratio);
-          if (minRatio === null || ratio.lt(minRatio)) { minRatio = ratio; pivotRow = r; }
-        } else { ratios[r-1] = '—'; }
-      }
-
-      if (pivotRow === -1) {
-        steps.push({ type:'unbounded', message:'No positive elements in pivot column. Unbounded.' });
-        return { status:'unbounded', steps, notes, solution: null };
-      }
-
-      var pivotVal = TAB[pivotRow][pivotCol];
-      var isArtLeaving = artSet.has(basis[pivotRow-1]);
-      var snap = snapshotTableau(TAB, basis, colNames, nc, totalCols, RHS, pivotCol, pivotRow, ratios, false);
-      steps.push({
-        type:'pivot', iteration: iteration+1, label:'Phase 2',
-        entering: colNames[pivotCol], leaving: colNames[basis[pivotRow-1]],
-        isArtLeaving, pivotVal: fmt(pivotVal),
-        tableau: snap.tab, basics: snap.bas, colNames: colNames.slice(), ratios
-      });
-
-      pivot(TAB, basis, pivotRow, pivotCol, nc, totalCols, RHS);
-      iteration++;
+      steps.push({ type: 'infeasible', message: 'Max iterations reached in Phase 2.' });
+      return { status: 'infeasible', steps, notes, solution: null };
     }
 
-    steps.push({ type:'infeasible', message:'Max iterations reached in Phase 2.' });
-    return { status:'infeasible', steps, notes, solution: null };
-  }
+    // ── Pivot operation ─────────────────────────────────────────
 
-  // ── Pivot operation ─────────────────────────────────────────
-
-  function pivot(TAB, basis, pivotRow, pivotCol, nc, totalCols, RHS) {
-    var pivotElem = TAB[pivotRow][pivotCol];
-    // Normalise pivot row
-    for (var c = 0; c <= totalCols; c++) {
-      TAB[pivotRow][c] = TAB[pivotRow][c].div(pivotElem);
-    }
-    // Eliminate column in all other rows
-    for (var r = 0; r <= nc; r++) {
-      if (r === pivotRow) continue;
-      var factor = TAB[r][pivotCol];
-      if (factor.eq(frac(0))) continue;
+    function pivot(TAB, basis, pivotRow, pivotCol, nc, totalCols, RHS) {
+      var pivotElem = TAB[pivotRow][pivotCol];
+      // Normalise pivot row
       for (var c = 0; c <= totalCols; c++) {
-        TAB[r][c] = TAB[r][c].sub(factor.mul(TAB[pivotRow][c]));
+        TAB[pivotRow][c] = TAB[pivotRow][c].div(pivotElem);
       }
-    }
-    basis[pivotRow - 1] = pivotCol;
-  }
-
-  // ── Snapshot tableau for step display ───────────────────────
-
-  function snapshotTableau(TAB, basis, colNames, nc, totalCols, RHS, pivotCol, pivotRow, ratios, isOptimal) {
-    var tab = [];
-    for (var r = 0; r <= nc; r++) {
-      var row = [];
-      for (var c = 0; c <= totalCols; c++) {
-        row.push(fmt(TAB[r][c]));
+      // Eliminate column in all other rows
+      for (var r = 0; r <= nc; r++) {
+        if (r === pivotRow) continue;
+        var factor = TAB[r][pivotCol];
+        if (factor.eq(frac(0))) continue;
+        for (var c = 0; c <= totalCols; c++) {
+          TAB[r][c] = TAB[r][c].sub(factor.mul(TAB[pivotRow][c]));
+        }
       }
-      tab.push(row);
-    }
-    return { tab, bas: basis.slice() };
-  }
-
-  // ── Build solution object ────────────────────────────────────
-
-  function buildSolution(TAB, basis, colNames, obj, choice, nv, nc, totalCols, RHS, steps, notes, isMin, artSet) {
-    var vals = new Array(totalCols).fill(null).map(function(){ return frac(0); });
-    for (var r = 0; r < nc; r++) {
-      vals[basis[r]] = TAB[r+1][RHS];
+      basis[pivotRow - 1] = pivotCol;
     }
 
-    var vars = [];
-    for (var i = 0; i < nv; i++) {
-      vars.push({ name: 'x' + (i+1), value: fmt(vals[i]) });
-    }
+    // ── Snapshot tableau for step display ───────────────────────
 
-    // Z = original objective dot solution (not the negated one)
-    var z = frac(0);
-    for (var i = 0; i < nv; i++) {
-      var coeff = isMin ? obj[i].neg() : obj[i];
-      z = z.add(coeff.mul(vals[i]));
-    }
-
-    return {
-      status: 'optimal',
-      steps,
-      notes,
-      solution: {
-        vars,
-        z: fmt(z),
-        direction: choice === 'max' ? 'maximised' : 'minimised'
+    function snapshotTableau(TAB, basis, colNames, nc, totalCols, RHS, pivotCol, pivotRow, ratios, isOptimal) {
+      var tab = [];
+      for (var r = 0; r <= nc; r++) {
+        var row = [];
+        for (var c = 0; c <= totalCols; c++) {
+          row.push(fmt(TAB[r][c]));
+        }
+        tab.push(row);
       }
-    };
-  }
+      return { tab, bas: basis.slice() };
+    }
+
+    // ── Build solution object ────────────────────────────────────
+
+    function buildSolution(TAB, basis, colNames, obj, choice, nv, nc, totalCols, RHS, steps, notes, isMin, artSet) {
+      var vals = new Array(totalCols).fill(null).map(function () { return frac(0); });
+      for (var r = 0; r < nc; r++) {
+        vals[basis[r]] = TAB[r + 1][RHS];
+      }
+
+      var vars = [];
+      for (var i = 0; i < nv; i++) {
+        vars.push({ name: 'x' + (i + 1), value: fmt(vals[i]) });
+      }
+
+      // Z = original objective dot solution (not the negated one)
+      var z = frac(0);
+      for (var i = 0; i < nv; i++) {
+        var coeff = isMin ? obj[i].neg() : obj[i];
+        z = z.add(coeff.mul(vals[i]));
+      }
+
+      return {
+        status: 'optimal',
+        steps,
+        notes,
+        solution: {
+          vars,
+          z: fmt(z),
+          direction: choice === 'max' ? 'maximised' : 'minimised'
+        }
+      };
+    }
 
 
-  // ============================================================
-  //  UI LAYER
-  // ============================================================
+    // ============================================================
+    //  UI LAYER
+    // ============================================================
 
-  const TEAM = [
-    { name: "Team Member 1", role: "Algorithm Design" },
-    { name: "Team Member 2", role: "Frontend & UI" },
-    { name: "Team Member 3", role: "Math & Validation" },
-    { name: "Team Member 4", role: "Testing & Docs" },
-  ];
+    const TEAM = [
+      { name: "Team Member 1", role: "Algorithm Design" },
+      { name: "Team Member 2", role: "Frontend & UI" },
+      { name: "Team Member 3", role: "Math & Validation" },
+      { name: "Team Member 4", role: "Testing & Docs" },
+    ];
 
-  (function buildTeam() {
-    const grid = document.getElementById('teamGrid');
-    TEAM.forEach(m => {
-      const initials = m.name.split(' ').map(w => w[0]).join('').slice(0,2);
-      grid.innerHTML += `
+    (function buildTeam() {
+      const grid = document.getElementById('teamGrid');
+      TEAM.forEach(m => {
+        const initials = m.name.split(' ').map(w => w[0]).join('').slice(0, 2);
+        grid.innerHTML += `
         <div class="team-card">
           <div class="team-avatar">${initials}</div>
           <div class="team-name">${m.name}</div>
           <div class="team-role">${m.role}</div>
         </div>`;
-    });
-  })();
+      });
+    })();
 
-  let numVars = 2, numCons = 2;
+    let numVars = 2, numCons = 2;
 
-  function generateForm() {
-    numVars = parseInt(document.getElementById('numVars').value) || 2;
-    numCons = parseInt(document.getElementById('numCons').value) || 2;
+    function generateForm() {
+      numVars = parseInt(document.getElementById('numVars').value) || 2;
+      numCons = parseInt(document.getElementById('numCons').value) || 2;
 
-    if (numVars < 1 || numVars > 10 || numCons < 1 || numCons > 10) {
-      showError('Please enter 1–10 variables and 1–10 constraints.');
-      return;
-    }
+      if (numVars < 1 || numVars > 10 || numCons < 1 || numCons > 10) {
+        showError('Please enter 1–10 variables and 1–10 constraints.');
+        return;
+      }
 
-    const objHeader = document.getElementById('objHeader');
-    objHeader.innerHTML = '<th></th>';
-    for (let i = 1; i <= numVars; i++) objHeader.innerHTML += `<th>x${i}</th>`;
+      const objHeader = document.getElementById('objHeader');
+      objHeader.innerHTML = '<th></th>';
+      for (let i = 1; i <= numVars; i++) objHeader.innerHTML += `<th>x${i}</th>`;
 
-    const objRow = document.getElementById('objRow');
-    objRow.innerHTML = '<td class="row-label">Z&nbsp;=</td>';
-    for (let i = 1; i <= numVars; i++) {
-      objRow.innerHTML += `<td><input type="text" id="obj_${i}" value="0" placeholder="0"></td>`;
-    }
+      const objRow = document.getElementById('objRow');
+      objRow.innerHTML = '<td class="row-label">Z&nbsp;=</td>';
+      for (let i = 1; i <= numVars; i++) {
+        objRow.innerHTML += `<td><input type="text" id="obj_${i}" value="0" placeholder="0"></td>`;
+      }
 
-    const vsDiv = document.getElementById('varSigns');
-    vsDiv.innerHTML = '';
-    for (let i = 1; i <= numVars; i++) {
-      vsDiv.innerHTML += `
+      const vsDiv = document.getElementById('varSigns');
+      vsDiv.innerHTML = '';
+      for (let i = 1; i <= numVars; i++) {
+        vsDiv.innerHTML += `
         <div class="form-group" style="min-width:130px;max-width:160px">
           <label>x${i} bound</label>
           <select id="sign_${i}">
@@ -1056,296 +1519,366 @@
             <option value="free">Unrestricted</option>
           </select>
         </div>`;
-    }
-
-    const conHeader = document.getElementById('conHeader');
-    conHeader.innerHTML = '<th>Row</th>';
-    for (let i = 1; i <= numVars; i++) conHeader.innerHTML += `<th>x${i}</th>`;
-    conHeader.innerHTML += '<th>Sign</th><th>RHS</th>';
-
-    const conBody = document.getElementById('conBody');
-    conBody.innerHTML = '';
-    for (let r = 1; r <= numCons; r++) {
-      let row = `<tr><td class="row-label">C${r}</td>`;
-      for (let i = 1; i <= numVars; i++) {
-        row += `<td><input type="text" id="con_${r}_${i}" value="0" placeholder="0"></td>`;
       }
-      row += `<td><select id="sign_c${r}">
+
+      const conHeader = document.getElementById('conHeader');
+      conHeader.innerHTML = '<th>Row</th>';
+      for (let i = 1; i <= numVars; i++) conHeader.innerHTML += `<th>x${i}</th>`;
+      conHeader.innerHTML += '<th>Sign</th><th>RHS</th>';
+
+      const conBody = document.getElementById('conBody');
+      conBody.innerHTML = '';
+      for (let r = 1; r <= numCons; r++) {
+        let row = `<tr><td class="row-label">C${r}</td>`;
+        for (let i = 1; i <= numVars; i++) {
+          row += `<td><input type="text" id="con_${r}_${i}" value="0" placeholder="0"></td>`;
+        }
+        row += `<td><select id="sign_c${r}">
                 <option value="<=">≤</option>
                 <option value="=">=</option>
                 <option value=">=">≥</option>
               </select></td>`;
-      row += `<td><input type="text" id="rhs_${r}" value="0" placeholder="0" style="max-width:80px"></td>`;
-      row += '</tr>';
-      conBody.innerHTML += row;
+        row += `<td><input type="text" id="rhs_${r}" value="0" placeholder="0" style="max-width:80px"></td>`;
+        row += '</tr>';
+        conBody.innerHTML += row;
+      }
+
+      document.getElementById('formArea').style.display = 'block';
+      document.getElementById('results').style.display = 'none';
+      document.getElementById('resultsInner').innerHTML = '';
+      hideError();
+      document.getElementById('formArea').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
-    document.getElementById('formArea').style.display = 'block';
-    document.getElementById('results').style.display = 'none';
-    document.getElementById('resultsInner').innerHTML = '';
-    hideError();
-    document.getElementById('formArea').scrollIntoView({ behavior:'smooth', block:'start' });
-  }
-
-  function parseFrac(str) {
-    str = (str || '').trim();
-    if (str === '') return null;
-    if (str.includes('/')) {
-      const parts = str.split('/');
-      if (parts.length !== 2) return null;
-      const n = parseInt(parts[0].trim(), 10);
-      const d = parseInt(parts[1].trim(), 10);
-      if (isNaN(n) || isNaN(d) || d === 0) return null;
-      return n / d;
-    }
-    const num = parseFloat(str);
-    if (isNaN(num)) return null;
-    return num;
-  }
-
-  function showError(msg) {
-    const el = document.getElementById('errorMsg');
-    el.textContent = msg;
-    el.classList.add('visible');
-  }
-  function hideError() {
-    document.getElementById('errorMsg').classList.remove('visible');
-  }
-
-  function solveLP() {
-    hideError();
-
-    const currentNumVars = parseInt(document.getElementById('numVars').value, 10) || 0;
-    const currentNumCons = parseInt(document.getElementById('numCons').value, 10) || 0;
-
-    if (!document.getElementById('obj_1')) {
-      showError('Please click "Generate Input Fields" first before solving.');
-      return;
-    }
-    if (!document.getElementById('obj_' + currentNumVars)) {
-      showError('Input fields are out of sync. Please click "Generate Input Fields" again.');
-      return;
+    function parseFrac(str) {
+      str = (str || '').trim();
+      if (str === '') return null;
+      if (str.includes('/')) {
+        const parts = str.split('/');
+        if (parts.length !== 2) return null;
+        const n = parseInt(parts[0].trim(), 10);
+        const d = parseInt(parts[1].trim(), 10);
+        if (isNaN(n) || isNaN(d) || d === 0) return null;
+        return n / d;
+      }
+      const num = parseFloat(str);
+      if (isNaN(num)) return null;
+      return num;
     }
 
-    numVars = currentNumVars;
-    numCons = currentNumCons;
-
-    const choice = document.querySelector('input[name="objective"]:checked').value;
-    const method = document.querySelector('input[name="method"]:checked').value;
-
-    const obj = [];
-    for (let i = 1; i <= numVars; i++) {
-      const el = document.getElementById('obj_' + i);
-      if (!el) { showError('Field for x' + i + ' not found. Please regenerate.'); return; }
-      const raw = el.value.trim();
-      if (raw === '') { showError('Objective coefficient for x' + i + ' is empty.'); return; }
-      const v = parseFrac(raw);
-      if (v === null) { showError('Invalid objective coefficient for x' + i + ': "' + raw + '"'); return; }
-      obj.push(v);
+    function showError(msg) {
+      const el = document.getElementById('errorMsg');
+      el.textContent = msg;
+      el.classList.add('visible');
+    }
+    function hideError() {
+      document.getElementById('errorMsg').classList.remove('visible');
     }
 
-    const varSigns = {};
-    for (let i = 1; i <= numVars; i++) {
-      const el = document.getElementById('sign_' + i);
-      varSigns[i-1] = el ? el.value : 'pos';
-    }
+    function solveLP() {
+      hideError();
 
-    const effectiveObj = obj.map((c, i) => varSigns[i] === 'neg' ? -c : c);
+      const currentNumVars = parseInt(document.getElementById('numVars').value, 10) || 0;
+      const currentNumCons = parseInt(document.getElementById('numCons').value, 10) || 0;
 
-    const constraints = [], signs = [], rhs = [];
-    for (let r = 1; r <= numCons; r++) {
-      const row = [];
+      if (!document.getElementById('obj_1')) {
+        showError('Please click "Generate Input Fields" first before solving.');
+        return;
+      }
+      if (!document.getElementById('obj_' + currentNumVars)) {
+        showError('Input fields are out of sync. Please click "Generate Input Fields" again.');
+        return;
+      }
+
+      numVars = currentNumVars;
+      numCons = currentNumCons;
+
+      const choice = document.querySelector('input[name="objective"]:checked').value;
+      const method = document.querySelector('input[name="method"]:checked').value;
+
+      const obj = [];
       for (let i = 1; i <= numVars; i++) {
-        const el = document.getElementById('con_' + r + '_' + i);
-        if (!el) { showError('Field C' + r + ' x' + i + ' not found. Please regenerate.'); return; }
+        const el = document.getElementById('obj_' + i);
+        if (!el) { showError('Field for x' + i + ' not found. Please regenerate.'); return; }
         const raw = el.value.trim();
-        if (raw === '') { showError('C' + r + ' x' + i + ' is empty.'); return; }
+        if (raw === '') { showError('Objective coefficient for x' + i + ' is empty.'); return; }
         const v = parseFrac(raw);
-        if (v === null) { showError('Invalid value at C' + r + ' x' + i + ': "' + raw + '"'); return; }
-        row.push(varSigns[i-1] === 'neg' ? -v : v);
-      }
-      const rhsEl = document.getElementById('rhs_' + r);
-      if (!rhsEl) { showError('RHS for C' + r + ' not found. Please regenerate.'); return; }
-      const rhsRaw = rhsEl.value.trim();
-      if (rhsRaw === '') { showError('RHS for C' + r + ' is empty.'); return; }
-      const rhsV = parseFrac(rhsRaw);
-      if (rhsV === null) { showError('Invalid RHS for C' + r + ': "' + rhsRaw + '"'); return; }
-
-      const signEl = document.getElementById('sign_c' + r);
-      let finalSign = signEl ? signEl.value : '<=';
-      let finalRhs = rhsV, finalRow = row;
-      if (rhsV < 0) {
-        finalRhs = -rhsV;
-        finalRow = row.map(v => -v);
-        if (finalSign === '<=') finalSign = '>=';
-        else if (finalSign === '>=') finalSign = '<=';
+        if (v === null) { showError('Invalid objective coefficient for x' + i + ': "' + raw + '"'); return; }
+        obj.push(v);
       }
 
-      constraints.push(finalRow);
-      signs.push(finalSign);
-      rhs.push(finalRhs);
+      const varSigns = {};
+      for (let i = 1; i <= numVars; i++) {
+        const el = document.getElementById('sign_' + i);
+        varSigns[i - 1] = el ? el.value : 'pos';
+      }
+
+      // ── Unrestricted variable splitting ──────────────────────────
+      // For 'free' variables substitute xi = xi+ − xi− (both ≥ 0).
+      // 'neg' variables: substitute xi = −xi', so all coefficients flip.
+      // expandedNumVars counts how many columns go into the solver.
+      let expandedNumVars = 0;
+      // freeExpMap[original_index] = index of xi+ in expanded list
+      const freeExpMap = {};
+      for (let i = 0; i < numVars; i++) {
+        if (varSigns[i] === 'free') {
+          freeExpMap[i] = expandedNumVars;
+          expandedNumVars += 2; // xi+ and xi−
+        } else {
+          expandedNumVars += 1;
+        }
+      }
+
+      // Build expanded objective coefficients
+      const effectiveObj = [];
+      for (let i = 0; i < numVars; i++) {
+        const c = obj[i];
+        if (varSigns[i] === 'neg') {
+          effectiveObj.push(-c);
+        } else if (varSigns[i] === 'free') {
+          effectiveObj.push(c);   // xi+
+          effectiveObj.push(-c);  // xi−
+        } else {
+          effectiveObj.push(c);
+        }
+      }
+
+      const constraints = [], signs = [], rhs = [];
+      for (let r = 1; r <= numCons; r++) {
+        const row = [];
+        for (let i = 1; i <= numVars; i++) {
+          const el = document.getElementById('con_' + r + '_' + i);
+          if (!el) { showError('Field C' + r + ' x' + i + ' not found. Please regenerate.'); return; }
+          const raw = el.value.trim();
+          if (raw === '') { showError('C' + r + ' x' + i + ' is empty.'); return; }
+          const v = parseFrac(raw);
+          if (v === null) { showError('Invalid value at C' + r + ' x' + i + ': "' + raw + '"'); return; }
+          if (varSigns[i - 1] === 'neg') {
+            row.push(-v);
+          } else if (varSigns[i - 1] === 'free') {
+            row.push(v);   // xi+
+            row.push(-v);  // xi−
+          } else {
+            row.push(v);
+          }
+        }
+        const rhsEl = document.getElementById('rhs_' + r);
+        if (!rhsEl) { showError('RHS for C' + r + ' not found. Please regenerate.'); return; }
+        const rhsRaw = rhsEl.value.trim();
+        if (rhsRaw === '') { showError('RHS for C' + r + ' is empty.'); return; }
+        const rhsV = parseFrac(rhsRaw);
+        if (rhsV === null) { showError('Invalid RHS for C' + r + ': "' + rhsRaw + '"'); return; }
+
+        const signEl = document.getElementById('sign_c' + r);
+        let finalSign = signEl ? signEl.value : '<=';
+
+        // Negative RHS → error (standard form requires b ≥ 0)
+        if (rhsV < 0) {
+          showError(`Constraint C${r} has a negative RHS (${rhsRaw}). The problem is infeasible as entered — please rewrite the constraint so the right-hand side is ≥ 0 (multiply both sides by −1 and flip the inequality).`);
+          return;
+        }
+
+        constraints.push(row);
+        signs.push(finalSign);
+        rhs.push(rhsV);
+      }
+
+      let result;
+      try {
+        result = solve({ obj: effectiveObj, constraints, signs, rhs, choice, numVars: expandedNumVars, numCons, method });
+      } catch (e) {
+        showError('Solver error: ' + e.message);
+        console.error(e);
+        return;
+      }
+
+      // ── Recover original variable values from expanded solution ──
+      // For free variables: xi = xi+ − xi− (from solver's expanded vars)
+      // Helper: parse a fraction-string like "-3/2" or "5" into a JS number
+      function toNum(s) {
+        s = String(s).trim();
+        const slash = s.indexOf('/');
+        if (slash !== -1) {
+          return parseInt(s.slice(0, slash), 10) / parseInt(s.slice(slash + 1), 10);
+        }
+        return parseFloat(s);
+      }
+
+      if (result.solution) {
+        const expVars = result.solution.vars; // expanded list from solver
+        const origVars = [];
+        let expIdx = 0;
+        for (let i = 0; i < numVars; i++) {
+          if (varSigns[i] === 'free') {
+            const pVal = toNum(expVars[expIdx].value);
+            const mVal = toNum(expVars[expIdx + 1].value);
+            origVars.push({ name: `x${i + 1}`, value: fmt(frac(pVal - mVal)) });
+            expIdx += 2;
+          } else if (varSigns[i] === 'neg') {
+            // xi = −xi', so negate back
+            const val = toNum(expVars[expIdx].value);
+            origVars.push({ name: `x${i + 1}`, value: fmt(frac(-val)) });
+            expIdx += 1;
+          } else {
+            origVars.push({ name: `x${i + 1}`, value: expVars[expIdx].value });
+            expIdx += 1;
+          }
+        }
+        result.solution.vars = origVars;
+      }
+
+      renderResults(result, choice, numVars, method, obj, constraints, signs, rhs, varSigns);
     }
 
-    let result;
-    try {
-      result = solve({ obj: effectiveObj, constraints, signs, rhs, choice, numVars, numCons, method });
-    } catch(e) {
-      showError('Solver error: ' + e.message);
-      console.error(e);
-      return;
-    }
+    function renderResults(result, choice, numVars, method, obj, constraints, signs, rhs, varSigns) {
+      const area = document.getElementById('resultsInner');
+      area.innerHTML = '';
 
-    renderResults(result, choice, numVars, method, obj, constraints, signs, rhs, varSigns);
-  }
+      const resultsDiv = document.getElementById('results');
+      resultsDiv.style.display = 'block';
 
-  function renderResults(result, choice, numVars, method, obj, constraints, signs, rhs, varSigns) {
-    const area = document.getElementById('resultsInner');
-    area.innerHTML = '';
+      let summaryHTML = `<div class="panel"><div class="panel-title">Problem Summary</div>`;
+      const dir = choice === 'max' ? 'Maximise' : 'Minimise';
+      const objStr = obj.map((c, i) => `${fmt(c)}·x${i + 1}`).join(' + ');
+      summaryHTML += `<p style="font-family:'JetBrains Mono',monospace;font-size:0.9rem;margin-bottom:1rem;color:var(--indigo)">${dir} Z = ${objStr}</p>`;
+      summaryHTML += `<p style="font-size:0.78rem;color:var(--muted);margin-bottom:0.6rem;letter-spacing:1px;text-transform:uppercase;font-weight:500">Subject to:</p>`;
+      for (let r = 0; r < constraints.length; r++) {
+        const lhs = constraints[r].map((c, j) => `${fmt(c)}·x${j + 1}`).join(' + ');
+        summaryHTML += `<p style="font-family:'JetBrains Mono',monospace;font-size:0.85rem;color:var(--text);margin-bottom:0.3rem">${lhs} ${signs[r]} ${fmt(rhs[r])}</p>`;
+      }
+      summaryHTML += `<p style="font-size:0.78rem;color:var(--muted);margin:0.8rem 0 0.4rem;letter-spacing:1px;text-transform:uppercase;font-weight:500">Variable Bounds:</p>`;
+      for (let i = 0; i < numVars; i++) {
+        const s = varSigns[i];
+        const txt = s === 'pos' ? `x${i + 1} ≥ 0` : s === 'neg' ? `x${i + 1} ≤ 0` : `x${i + 1} unrestricted`;
+        summaryHTML += `<span style="display:inline-block;margin-right:1.5rem;font-family:'JetBrains Mono',monospace;font-size:0.83rem;color:var(--muted)">${txt}</span>`;
+      }
+      summaryHTML += `</div>`;
 
-    const resultsDiv = document.getElementById('results');
-    resultsDiv.style.display = 'block';
-
-    let summaryHTML = `<div class="panel"><div class="panel-title">Problem Summary</div>`;
-    const dir = choice === 'max' ? 'Maximise' : 'Minimise';
-    const objStr = obj.map((c, i) => `${fmt(c)}·x${i+1}`).join(' + ');
-    summaryHTML += `<p style="font-family:'JetBrains Mono',monospace;font-size:0.9rem;margin-bottom:1rem;color:var(--indigo)">${dir} Z = ${objStr}</p>`;
-    summaryHTML += `<p style="font-size:0.78rem;color:var(--muted);margin-bottom:0.6rem;letter-spacing:1px;text-transform:uppercase;font-weight:500">Subject to:</p>`;
-    for (let r = 0; r < constraints.length; r++) {
-      const lhs = constraints[r].map((c, j) => `${fmt(c)}·x${j+1}`).join(' + ');
-      summaryHTML += `<p style="font-family:'JetBrains Mono',monospace;font-size:0.85rem;color:var(--text);margin-bottom:0.3rem">${lhs} ${signs[r]} ${fmt(rhs[r])}</p>`;
-    }
-    summaryHTML += `<p style="font-size:0.78rem;color:var(--muted);margin:0.8rem 0 0.4rem;letter-spacing:1px;text-transform:uppercase;font-weight:500">Variable Bounds:</p>`;
-    for (let i = 0; i < numVars; i++) {
-      const s = varSigns[i];
-      const txt = s === 'pos' ? `x${i+1} ≥ 0` : s === 'neg' ? `x${i+1} ≤ 0` : `x${i+1} unrestricted`;
-      summaryHTML += `<span style="display:inline-block;margin-right:1.5rem;font-family:'JetBrains Mono',monospace;font-size:0.83rem;color:var(--muted)">${txt}</span>`;
-    }
-    summaryHTML += `</div>`;
-
-    if (result.notes && result.notes.length) {
-      summaryHTML += `<div class="panel"><div class="panel-title">Variables Added</div>
+      if (result.notes && result.notes.length) {
+        summaryHTML += `<div class="panel"><div class="panel-title">Variables Added</div>
         <ul class="notes-list">${result.notes.map(n => `<li>${n}</li>`).join('')}</ul></div>`;
-    }
+      }
 
-    area.innerHTML += summaryHTML;
+      area.innerHTML += summaryHTML;
 
-    const stepsPanel = document.createElement('div');
-    stepsPanel.className = 'panel';
-    stepsPanel.innerHTML = '<div class="panel-title">Step-by-Step Iterations</div>';
+      const stepsPanel = document.createElement('div');
+      stepsPanel.className = 'panel';
+      stepsPanel.innerHTML = '<div class="panel-title">Step-by-Step Iterations</div>';
 
-    for (const step of result.steps) {
-      const block = document.createElement('div');
-      block.className = 'step-block';
+      for (const step of result.steps) {
+        const block = document.createElement('div');
+        block.className = 'step-block';
 
-      const badgeClass = step.label && step.label.includes('Phase 1') ? 'badge-phase1'
-                       : step.label && step.label.includes('Phase 2') ? 'badge-phase2'
-                       : 'badge-bigm';
+        const badgeClass = step.label && step.label.includes('Phase 1') ? 'badge-phase1'
+          : step.label && step.label.includes('Phase 2') ? 'badge-phase2'
+            : 'badge-bigm';
 
-      if (step.type === 'pivot' || step.type === 'optimal') {
-        const titleTxt = step.type === 'optimal' ? `Iteration ${step.iteration} — Optimal` : `Iteration ${step.iteration}`;
-        block.innerHTML = `<div class="step-header">
+        if (step.type === 'pivot' || step.type === 'optimal') {
+          const titleTxt = step.type === 'optimal' ? `Iteration ${step.iteration} — Optimal` : `Iteration ${step.iteration}`;
+          block.innerHTML = `<div class="step-header">
           <span class="step-badge ${badgeClass}">${step.label || ''}</span>
           <span class="step-title-text">${titleTxt}</span>
         </div>`;
 
-        if (step.type === 'pivot') {
-          block.innerHTML += `<div class="pivot-info">
+          if (step.type === 'pivot') {
+            block.innerHTML += `<div class="pivot-info">
             <span><span class="dot dot-enter"></span>Entering: <strong>${step.entering}</strong></span>
             <span><span class="dot dot-leave"></span>Leaving: <strong>${step.leaving}</strong>${step.isArtLeaving ? ' <em style="color:var(--accent-leave)">(artificial)</em>' : ''}</span>
             <span><span class="dot dot-pivot"></span>Pivot element: <strong>${step.pivotVal}</strong></span>
           </div>`;
+          }
+
+          if (step.type === 'optimal') {
+            block.innerHTML += `<div class="msg-box msg-optimal">✓ ${step.message}</div>`;
+          }
+
+          block.innerHTML += renderTableau(step.tableau, step.basics, step.colNames, step.pivotCol, step.pivotRow, step.ratios, step.type === 'optimal');
         }
 
-        if (step.type === 'optimal') {
-          block.innerHTML += `<div class="msg-box msg-optimal">✓ ${step.message}</div>`;
-        }
+        if (step.type === 'infeasible') block.innerHTML = `<div class="msg-box msg-warn">⚠ ${step.message}</div>`;
+        if (step.type === 'unbounded') block.innerHTML = `<div class="msg-box msg-warn">⚠ ${step.message}</div>`;
 
-        block.innerHTML += renderTableau(step.tableau, step.basics, step.colNames, step.pivotCol, step.pivotRow, step.ratios, step.type === 'optimal');
+        stepsPanel.appendChild(block);
       }
 
-      if (step.type === 'infeasible') block.innerHTML = `<div class="msg-box msg-warn">⚠ ${step.message}</div>`;
-      if (step.type === 'unbounded')  block.innerHTML = `<div class="msg-box msg-warn">⚠ ${step.message}</div>`;
+      area.appendChild(stepsPanel);
 
-      stepsPanel.appendChild(block);
-    }
-
-    area.appendChild(stepsPanel);
-
-    let banner;
-    if (result.status === 'optimal') {
-      banner = `<div class="result-banner optimal"><span class="banner-icon">✅</span><div>
+      let banner;
+      if (result.status === 'optimal') {
+        banner = `<div class="result-banner optimal"><span class="banner-icon">✅</span><div>
         <strong>Optimal solution found</strong><br>
         <span style="font-size:0.85rem">The problem has a unique (or possibly multiple) optimal solution.</span>
       </div></div>`;
-    } else if (result.status === 'unbounded') {
-      banner = `<div class="result-banner unbounded"><span class="banner-icon">♾️</span><div>
+      } else if (result.status === 'unbounded') {
+        banner = `<div class="result-banner unbounded"><span class="banner-icon">♾️</span><div>
         <strong>Problem is Unbounded</strong><br>
         <span style="font-size:0.85rem">The objective can be increased/decreased indefinitely.</span>
       </div></div>`;
-    } else {
-      banner = `<div class="result-banner infeasible"><span class="banner-icon">🚫</span><div>
+      } else {
+        banner = `<div class="result-banner infeasible"><span class="banner-icon">🚫</span><div>
         <strong>Problem is Infeasible</strong><br>
         <span style="font-size:0.85rem">No feasible solution exists.</span>
       </div></div>`;
-    }
-
-    area.innerHTML += banner;
-
-    if (result.solution) {
-      const sol = result.solution;
-      let solHTML = `<div class="panel"><div class="panel-title">Optimal Solution</div><div class="solution-grid">`;
-      for (const v of sol.vars) {
-        solHTML += `<div class="solution-card"><div class="var-name">${v.name}</div><div class="var-val">${v.value}</div></div>`;
       }
-      solHTML += `<div class="solution-card z-card"><div class="var-name">Z (${sol.direction})</div><div class="var-val">${sol.z}</div></div>`;
-      solHTML += `</div></div>`;
-      area.innerHTML += solHTML;
+
+      area.innerHTML += banner;
+
+      if (result.solution) {
+        const sol = result.solution;
+        let solHTML = `<div class="panel"><div class="panel-title">Optimal Solution</div><div class="solution-grid">`;
+        for (const v of sol.vars) {
+          solHTML += `<div class="solution-card"><div class="var-name">${v.name}</div><div class="var-val">${v.value}</div></div>`;
+        }
+        solHTML += `<div class="solution-card z-card"><div class="var-name">Z (${sol.direction})</div><div class="var-val">${sol.z}</div></div>`;
+        solHTML += `</div></div>`;
+        area.innerHTML += solHTML;
+      }
+
+      resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
-    resultsDiv.scrollIntoView({ behavior:'smooth', block:'start' });
-  }
+    function renderTableau(tableau, basics, colNames, pivotCol, pivotRow, ratios, isOptimal) {
+      const showRatio = !isOptimal && pivotCol !== undefined && pivotCol !== null && pivotCol >= 0 && ratios && ratios.length > 0;
 
-  function renderTableau(tableau, basics, colNames, pivotCol, pivotRow, ratios, isOptimal) {
-    const showRatio = !isOptimal && pivotCol !== undefined && pivotCol !== null && pivotCol >= 0 && ratios && ratios.length > 0;
-
-    let html = `<div class="tableau-wrap"><table class="tableau-table"><thead><tr><th>Basis</th>`;
-    colNames.forEach((n, j) => {
-      const isEnterCol = !isOptimal && j === pivotCol;
-      html += `<th${isEnterCol ? ' class="th-enter"' : ''}>${n}</th>`;
-    });
-    if (showRatio) html += `<th class="th-ratio">Ratio</th>`;
-    html += `</tr></thead><tbody>`;
-
-    for (let r = 0; r < tableau.length; r++) {
-      const isZRow = r === 0;
-      const isLeaving = !isOptimal && r === pivotRow;
-      html += `<tr${isZRow ? ' class="row-z"' : isLeaving ? ' class="row-leaving"' : ''}>`;
-
-      const basisLabel = isZRow ? 'Z'
-        : (basics && basics[r-1] !== undefined && basics[r-1] < colNames.length
-            ? colNames[basics[r-1]] : '?');
-      html += `<td>${basisLabel}</td>`;
-
-      tableau[r].forEach((val, j) => {
-        const isPivotCell  = !isOptimal && r === pivotRow && j === pivotCol;
-        const isEnterCell  = !isOptimal && !isZRow && j === pivotCol;
-        let cls = '';
-        if (isPivotCell)      cls = ' class="cell-pivot"';
-        else if (isEnterCell) cls = ' class="td-enter-col"';
-        html += `<td${cls}>${val}</td>`;
+      let html = `<div class="tableau-wrap"><table class="tableau-table"><thead><tr><th>Basis</th>`;
+      colNames.forEach((n, j) => {
+        const isEnterCol = !isOptimal && j === pivotCol;
+        html += `<th${isEnterCol ? ' class="th-enter"' : ''}>${n}</th>`;
       });
+      if (showRatio) html += `<th class="th-ratio">Ratio</th>`;
+      html += `</tr></thead><tbody>`;
 
-      if (showRatio) {
-        const ratio = r === 0 ? '' : (ratios[r-1] !== undefined ? ratios[r-1] : '—');
-        html += `<td class="td-ratio">${ratio}</td>`;
+      for (let r = 0; r < tableau.length; r++) {
+        const isZRow = r === 0;
+        const isLeaving = !isOptimal && r === pivotRow;
+        html += `<tr${isZRow ? ' class="row-z"' : isLeaving ? ' class="row-leaving"' : ''}>`;
+
+        const basisLabel = isZRow ? 'Z'
+          : (basics && basics[r - 1] !== undefined && basics[r - 1] < colNames.length
+            ? colNames[basics[r - 1]] : '?');
+        html += `<td>${basisLabel}</td>`;
+
+        tableau[r].forEach((val, j) => {
+          const isPivotCell = !isOptimal && r === pivotRow && j === pivotCol;
+          const isEnterCell = !isOptimal && !isZRow && j === pivotCol;
+          let cls = '';
+          if (isPivotCell) cls = ' class="cell-pivot"';
+          else if (isEnterCell) cls = ' class="td-enter-col"';
+          html += `<td${cls}>${val}</td>`;
+        });
+
+        if (showRatio) {
+          const ratio = r === 0 ? '' : (ratios[r - 1] !== undefined ? ratios[r - 1] : '—');
+          html += `<td class="td-ratio">${ratio}</td>`;
+        }
+
+        html += `</tr>`;
       }
 
-      html += `</tr>`;
+      html += `</tbody></table></div>`;
+      return html;
     }
-
-    html += `</tbody></table></div>`;
-    return html;
-  }
   </script>
 </body>
+
 </html>
