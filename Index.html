@@ -170,6 +170,36 @@
     .btn-arrow { font-size: 1rem; transition: transform 0.2s; }
     .btn-primary:hover .btn-arrow { transform: translateX(4px); }
 
+    .hero-btns {
+      display: flex;
+      gap: 1.2rem;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.8rem;
+      background: transparent;
+      color: var(--navy);
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      padding: 0.9rem 2.8rem;
+      border: 2px solid var(--gold);
+      transition: background 0.2s ease, color 0.2s ease;
+    }
+    .btn-secondary:hover {
+      background: var(--gold);
+      color: var(--navy);
+    }
+    .btn-secondary .btn-arrow { font-size: 1rem; transition: transform 0.2s; }
+    .btn-secondary:hover .btn-arrow { transform: translateY(3px); }
+
     /* SCROLL INDICATOR */
     .scroll-hint {
       position: absolute; bottom: 2rem;
@@ -438,22 +468,28 @@
 
   <!-- NAV -->
   <nav>
-    <div class="nav-logo">Simplex<span>Solve</span></div>
+    <a href="index.html" class="nav-logo">The<span>Optimalist</span></a>
     <div class="nav-links">
       <a href="index.html">Home</a>
+      <a href="howitworks.html">How it Works</a>
       <a href="solver.html">Solver</a>
-      <a href="solver.html#team">Meet the Team</a>
+      <a href="team.html" class="active">Meet the Team</a>
     </div>
   </nav>
 
   <!-- HERO -->
   <div class="hero">
     <div class="hero-tag">Linear Programming · Operations Research</div>
-    <h1>Solve <em>any</em> linear<br>program, step by step.</h1>
+    <h1>Solving linear optimization problems</h1>
     <p>Enter your objective function, constraints, and variables. Get beautiful, fraction-exact tableau walkthroughs using Big-M or Two-Phase simplex.</p>
-    <a href="solver.html" class="btn-primary">
-      Open the Solver <span class="btn-arrow">→</span>
-    </a>
+    <div class="hero-btns">
+      <a href="solver.html" class="btn-primary">
+        Open the Solver <span class="btn-arrow">→</span>
+      </a>
+      <a href="howitworks.html" class="btn-secondary">
+        How it Works <span class="btn-arrow">↓</span>
+      </a>
+    </div>
     <div class="scroll-hint">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
       SCROLL
@@ -491,54 +527,15 @@
           <div class="card-title">Special Cases</div>
           <div class="card-text">The solver detects unbounded problems (no positive pivot column entries) and infeasibility (Phase-1 objective > 0), reporting them with clear diagnostic messages.</div>
         </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- HOW IT WORKS -->
-  <section class="section-how">
-    <div class="section-inner">
-      <div class="fade-up">
-        <div class="section-label">Workflow</div>
-        <h2 class="section-title">How it Works</h2>
-        <p class="section-desc">Two flavours of the simplex method are supported: the classic Big-M penalty approach, and the numerically cleaner Two-Phase method.</p>
-      </div>
-
-      <div class="steps-list fade-up" style="transition-delay:0.1s">
-        <div class="step">
-          <div class="step-num">01</div>
-          <div class="step-title">Define your LP</div>
-          <div class="step-text">Enter the number of variables and constraints. Fill in coefficients, choose constraint signs (≤, =, ≥), and set variable bounds (non-negative, non-positive, or free).</div>
+        <div class="glass-card">
+          <span class="card-icon">📑</span>
+          <div class="card-title">Step-by-Step Iterations</div>
+          <div class="card-text">The solver generates a Full Tableau History, allowing users to trace every pivot step. Each iteration displays the current basis, basic feasible solution, and the Z-value, making it an ideal tool for learning the manual Simplex process.</div>
         </div>
-        <div class="step">
-          <div class="step-num">02</div>
-          <div class="step-title">Add auxiliary variables</div>
-          <div class="step-text">Slack, surplus, and artificial variables are automatically inserted. Big-M applies a large penalty; Phase 1 minimises the sum of artificials to find a basic feasible solution.</div>
-        </div>
-        <div class="step">
-          <div class="step-num">03</div>
-          <div class="step-title">Iterate</div>
-          <div class="step-text">Each tableau is printed with the full ratio column. The entering and leaving variable are highlighted, and the pivot element is identified at every step.</div>
-        </div>
-        <div class="step">
-          <div class="step-num">04</div>
-          <div class="step-title">Read the solution</div>
-          <div class="step-text">When optimality is reached, variable values and the objective are reported as exact fractions — no floating-point rounding errors.</div>
-        </div>
-      </div>
-
-      <div class="formula-card fade-up" style="transition-delay:0.2s">
-        <div class="formula-block">
-          <div class="formula-label">Objective</div>
-          <div class="formula-text">Maximise Z = c₁x₁ + c₂x₂ + … + cₙxₙ</div>
-        </div>
-        <div class="formula-block">
-          <div class="formula-label">Subject to</div>
-          <div class="formula-text">a₁₁x₁ + a₁₂x₂ ≤ b₁<br>a₂₁x₁ + a₂₂x₂ ≥ b₂<br>a₃₁x₁ + a₃₂x₂ = b₃</div>
-        </div>
-        <div class="formula-block">
-          <div class="formula-label">Variable bounds</div>
-          <div class="formula-text">xᵢ ≥ 0 (default)<br>xᵢ ≤ 0 (non-positive)<br>xᵢ unrestricted</div>
+        <div class="glass-card">
+          <span class="card-icon">📉</span>
+          <div class="card-title">Sensitivity Analysis</div>
+          <div class="card-text">Post-optimality analysis determines the allowable ranges for objective function coefficients and right-hand side values. It identifies how much a parameter can change before the current basis is no longer optimal or feasible.</div>
         </div>
       </div>
     </div>
@@ -557,7 +554,7 @@
 
   <!-- FOOTER -->
   <footer>
-    <div class="footer-logo">Optimalist</div>
+    <div class="footer-logo">TheOptimalist</div>
     <div>Big-M &amp; Two-Phase · Exact Fraction Arithmetic</div>
   </footer>
 
