@@ -1,0 +1,1675 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Solver — SimplexSolve</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --cream: #f5f0e8;
+      --parchment: #ede8dc;
+      --dark-parchment: #ddd5c5;
+      --navy: #1a2744;
+      --navy-mid: #2c3e6b;
+      --gold: #b8922a;
+      --gold-light: #d4a840;
+      --gold-pale: #f5ead0;
+      --text: #1c1c1c;
+      --muted: #5a5040;
+      --rule: rgba(26,39,68,0.15);
+      --shadow: 0 2px 16px rgba(26,39,68,0.09);
+      --shadow-lg: 0 8px 40px rgba(26,39,68,0.12);
+      --accent-enter: #2a7a4e;
+      --accent-leave: #b83232;
+      --accent-pivot: #b8922a;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Lato', sans-serif;
+      color: var(--text);
+      min-height: 100vh;
+      background-color: var(--cream);
+      background-image:
+        linear-gradient(rgba(26,39,68,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(26,39,68,0.025) 1px, transparent 1px);
+      background-size: 40px 40px;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--navy), var(--gold), var(--navy));
+      z-index: 999;
+    }
+
+    .blob { display: none; }
+
+    nav {
+      position: sticky; top: 4px; z-index: 200;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.9rem 3rem;
+      background: var(--navy);
+      border-bottom: 2px solid var(--gold);
+    }
+    .nav-logo { font-family: 'EB Garamond', serif; font-size: 1.45rem; font-weight: 700; color: var(--cream); text-decoration: none; letter-spacing: 0.3px; }
+    .nav-logo span { color: var(--gold-light); }
+    .nav-links a { text-decoration: none; color: rgba(245,240,232,0.65); font-size: 0.8rem; font-weight: 400; letter-spacing: 1.5px; text-transform: uppercase; margin-left: 2.5rem; transition: color 0.2s; }
+    .nav-links a:hover, .nav-links a.active { color: var(--gold-light); }
+
+    .page { position: relative; z-index: 1; max-width: 1000px; margin: 0 auto; padding: 3rem 2rem 6rem; }
+
+    .page-header { text-align: center; margin-bottom: 3rem; }
+    .page-tag { display: inline-block; background: transparent; border: 1px solid var(--gold); color: var(--navy); font-size: 0.65rem; letter-spacing: 3px; text-transform: uppercase; padding: 0.35rem 1.2rem; margin-bottom: 1rem; font-family: 'Lato', sans-serif; font-weight: 700; }
+    .page-title { font-family: 'EB Garamond', serif; font-size: clamp(2rem, 5vw, 3rem); font-weight: 600; color: var(--navy); }
+
+    .panel {
+      background: rgba(255,255,255,0.8);
+      border: 1px solid var(--rule);
+      border-top: 3px solid var(--gold);
+      border-radius: 0;
+      padding: 2.5rem;
+      box-shadow: var(--shadow);
+      margin-bottom: 2rem;
+    }
+    .panel-title {
+      font-family: 'EB Garamond', serif;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--navy);
+      margin-bottom: 1.8rem;
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      letter-spacing: 0.2px;
+    }
+    .panel-title::before {
+      content: '';
+      display: block;
+      width: 20px; height: 2px;
+      background: var(--gold);
+    }
+
+    .form-row { display: flex; gap: 1.2rem; flex-wrap: wrap; margin-bottom: 1.4rem; align-items: flex-end; }
+    .form-group { display: flex; flex-direction: column; gap: 0.4rem; flex: 1; min-width: 140px; }
+    .form-group label { font-size: 0.75rem; font-weight: 700; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+
+    input[type="number"],
+    input[type="text"],
+    select {
+      background: var(--cream);
+      border: 1.5px solid var(--rule);
+      border-radius: 0;
+      padding: 0.6rem 0.9rem;
+      font-size: 0.92rem;
+      color: var(--text);
+      font-family: 'Lato', sans-serif;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      width: 100%;
+    }
+    input:focus, select:focus {
+      border-color: var(--gold);
+      box-shadow: 0 0 0 2px rgba(184,146,42,0.12);
+    }
+
+    .coeff-table-wrap { overflow-x: auto; margin-top: 0.5rem; }
+    .coeff-table { border-collapse: collapse; width: 100%; min-width: 500px; }
+    .coeff-table th {
+      font-size: 0.7rem; font-weight: 700; color: var(--navy);
+      letter-spacing: 1.5px; text-transform: uppercase;
+      padding: 0.5rem 0.5rem 0.8rem;
+      text-align: center;
+      border-bottom: 2px solid var(--gold);
+      background: var(--parchment);
+    }
+    .coeff-table td { padding: 0.35rem 0.4rem; text-align: center; }
+    .coeff-table input[type="text"] { text-align: center; padding: 0.5rem 0.4rem; font-family: 'Source Code Pro', monospace; font-size: 0.88rem; min-width: 60px; }
+    .coeff-table .row-label { font-family: 'EB Garamond', serif; font-size: 0.95rem; font-weight: 700; color: var(--navy); white-space: nowrap; }
+    .coeff-table select { padding: 0.5rem 0.3rem; min-width: 64px; font-size: 0.85rem; }
+
+    .radio-group { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .radio-btn input { display: none; }
+    .radio-btn label {
+      display: inline-block;
+      padding: 0.4rem 1rem;
+      border-radius: 0;
+      border: 1.5px solid var(--rule);
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.18s;
+      background: var(--cream);
+    }
+    .radio-btn input:checked + label {
+      background: var(--navy);
+      color: var(--cream);
+      border-color: var(--navy);
+    }
+
+    .btn-solve {
+      width: 100%;
+      padding: 0.95rem;
+      background: var(--navy);
+      color: var(--cream);
+      border: 2px solid var(--navy);
+      border-radius: 0;
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      font-family: 'Lato', sans-serif;
+      cursor: pointer;
+      box-shadow: none;
+      transition: background 0.2s, color 0.2s, border-color 0.2s;
+    }
+    .btn-solve:hover { background: var(--gold); border-color: var(--gold); color: var(--navy); }
+    .btn-solve:active { opacity: 0.9; }
+    .btn-solve:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    #results { display: none; }
+    #results.visible { display: block; }
+
+    .result-banner {
+      border-radius: 0;
+      padding: 1.2rem 2rem;
+      margin-bottom: 1.5rem;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      border-left: 4px solid;
+    }
+    .result-banner.optimal { background: rgba(42,122,78,0.07); border-color: var(--accent-enter); color: #1a4a30; }
+    .result-banner.unbounded { background: rgba(184,146,42,0.08); border-color: var(--gold); color: #5a3e0a; }
+    .result-banner.infeasible { background: rgba(184,50,50,0.07); border-color: var(--accent-leave); color: #5a1a1a; }
+    .result-banner .banner-icon { font-size: 1.6rem; }
+
+    .solution-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0; margin: 1.5rem 0; border: 1px solid var(--rule); }
+    .solution-card {
+      background: var(--cream);
+      border: none;
+      border-right: 1px solid var(--rule);
+      border-radius: 0;
+      padding: 1.2rem;
+      text-align: center;
+    }
+    .solution-card .var-name { font-size: 0.7rem; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 0.4rem; font-weight: 700; }
+    .solution-card .var-val { font-family: 'Source Code Pro', monospace; font-size: 1.4rem; font-weight: 500; color: var(--navy); }
+    .solution-card.z-card { background: var(--navy); border-color: var(--navy); }
+    .solution-card.z-card .var-name { color: var(--gold-light); }
+    .solution-card.z-card .var-val { color: var(--cream); }
+
+    .step-block { margin-bottom: 2.5rem; }
+    .step-header { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 1rem; }
+    .step-badge {
+      font-family: 'Lato', sans-serif;
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 0.2rem 0.7rem;
+      border-radius: 0;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+    }
+    .badge-phase1 { background: rgba(26,39,68,0.08); color: var(--navy); border: 1px solid var(--rule); }
+    .badge-phase2 { background: rgba(184,146,42,0.12); color: #7a5a10; border: 1px solid rgba(184,146,42,0.3); }
+    .badge-bigm { background: rgba(26,39,68,0.05); color: var(--navy-mid); border: 1px solid rgba(26,39,68,0.15); }
+
+    .step-title-text { font-size: 0.9rem; font-weight: 700; color: var(--text); letter-spacing: 0.5px; }
+    .pivot-info { font-size: 0.8rem; color: var(--muted); margin-bottom: 0.8rem; display: flex; gap: 1.5rem; flex-wrap: wrap; }
+    .pivot-info span { display: inline-flex; align-items: center; gap: 0.3rem; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+    .dot-enter { background: var(--accent-enter); }
+    .dot-leave { background: var(--accent-leave); }
+    .dot-pivot { background: var(--accent-pivot); }
+
+    .tableau-wrap { overflow-x: auto; }
+    .tableau-table {
+      border-collapse: collapse;
+      border-spacing: 0;
+      font-family: 'Source Code Pro', monospace;
+      font-size: 0.83rem;
+      width: 100%;
+      min-width: 400px;
+      border: 1px solid var(--rule);
+    }
+    .tableau-table th {
+      background: var(--parchment);
+      color: var(--navy);
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      padding: 0.6rem 0.8rem;
+      text-align: right;
+      border-bottom: 2px solid var(--gold);
+      border-right: 1px solid var(--rule);
+      white-space: nowrap;
+    }
+    .tableau-table th:first-child { text-align: left; }
+    .tableau-table td {
+      padding: 0.5rem 0.8rem;
+      text-align: right;
+      border-bottom: 1px solid rgba(26,39,68,0.07);
+      border-right: 1px solid rgba(26,39,68,0.07);
+      color: var(--text);
+      transition: background 0.15s;
+    }
+    .tableau-table td:first-child { text-align: left; font-weight: 500; color: var(--navy); font-family: 'EB Garamond', serif; font-size: 0.95rem; }
+    .tableau-table tr:hover td { background: rgba(237,232,220,0.6); }
+
+    .th-enter { background: rgba(42,122,78,0.1) !important; color: var(--accent-enter) !important; }
+    .td-enter-col { background: rgba(42,122,78,0.04); }
+    .cell-pivot { background: rgba(184,146,42,0.18) !important; font-weight: 700; color: #7a5a10 !important; }
+    .th-ratio { background: rgba(26,39,68,0.06) !important; color: var(--navy-mid) !important; }
+    .td-ratio { color: var(--navy-mid); font-style: italic; }
+    .row-z td { background: rgba(26,39,68,0.04); font-weight: 500; }
+    .row-leaving td:first-child { background: rgba(184,50,50,0.06); }
+
+    .notes-list { list-style: none; padding: 0; }
+    .notes-list li {
+      display: flex; align-items: flex-start; gap: 0.6rem;
+      font-size: 0.88rem; color: var(--muted);
+      padding: 0.45rem 0;
+      border-bottom: 1px solid var(--rule);
+    }
+    .notes-list li:last-child { border-bottom: none; }
+    .notes-list li::before { content: '→'; color: var(--gold); flex-shrink: 0; margin-top: 1px; }
+
+    .msg-box {
+      display: flex; align-items: center; gap: 0.7rem;
+      padding: 0.8rem 1.2rem;
+      border-radius: 0;
+      font-size: 0.88rem;
+      margin-top: 0.5rem;
+      border-left: 3px solid;
+    }
+    .msg-optimal { background: rgba(42,122,78,0.07); color: #1a4a30; border-color: var(--accent-enter); }
+    .msg-warn { background: rgba(184,146,42,0.08); color: #5a3e0a; border-color: var(--gold); }
+
+    .team-section { padding: 5rem 2rem; position: relative; z-index: 1; background: var(--parchment); border-top: 1px solid var(--rule); }
+    .team-inner { max-width: 900px; margin: 0 auto; }
+    .team-header { text-align: center; margin-bottom: 3rem; }
+    .team-label { font-size: 0.65rem; letter-spacing: 4px; text-transform: uppercase; color: var(--gold); font-weight: 700; margin-bottom: 0.6rem; font-family: 'Lato', sans-serif; }
+    .team-title { font-family: 'EB Garamond', serif; font-size: 2.4rem; font-weight: 600; color: var(--navy); }
+    .team-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1.5rem; }
+    .team-card {
+      background: var(--cream);
+      border: 1px solid var(--rule);
+      border-top: 2px solid var(--gold);
+      border-radius: 0;
+      padding: 2rem 1.5rem;
+      text-align: center;
+      box-shadow: var(--shadow);
+      transition: box-shadow 0.25s;
+    }
+    .team-card:hover { box-shadow: var(--shadow-lg); transform: none; }
+    .team-avatar {
+      width: 60px; height: 60px;
+      border-radius: 0;
+      background: var(--navy);
+      margin: 0 auto 1rem;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'EB Garamond', serif;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--gold-light);
+    }
+    .team-name { font-weight: 700; font-size: 0.95rem; color: var(--navy); margin-bottom: 0.25rem; letter-spacing: 0.3px; }
+    .team-role { font-size: 0.75rem; color: var(--muted); letter-spacing: 0.5px; }
+
+    .divider { height: 1px; background: var(--rule); margin: 2rem 0; }
+
+    footer { position: relative; z-index: 1; padding: 1.5rem 3rem; border-top: 2px solid var(--gold); background: var(--navy); display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: rgba(245,240,232,0.5); letter-spacing: 1px; text-transform: uppercase; }
+    footer .footer-logo { font-family: 'EB Garamond', serif; font-weight: 700; font-size: 1.1rem; color: var(--cream); letter-spacing: 0.3px; text-transform: none; }
+
+    .error-msg { background: rgba(184,50,50,0.07); border: none; border-left: 3px solid var(--accent-leave); border-radius: 0; padding: 1rem 1.4rem; color: #5a1a1a; font-size: 0.9rem; margin-bottom: 1rem; display: none; }
+    .error-msg.visible { display: block; }
+
+    @media(max-width:600px){
+      nav { padding: 0.8rem 1.2rem; }
+      .panel { padding: 1.5rem; }
+      .page { padding: 2rem 1rem 5rem; }
+    }
+
+    /* ── Learn Mode Toggle ── */
+    .learn-toggle-wrap { display:inline-flex; align-items:center; cursor:pointer; user-select:none; }
+    .learn-toggle-wrap input { display:none; }
+    .learn-toggle-track {
+      position:relative; width:52px; height:28px;
+      background:var(--dark-parchment); border:2px solid var(--rule);
+      border-radius:14px; transition:background 0.25s, border-color 0.25s;
+    }
+    .learn-toggle-wrap input:checked ~ .learn-toggle-track {
+      background:var(--navy); border-color:var(--navy);
+    }
+    .learn-toggle-thumb {
+      position:absolute; top:3px; left:3px;
+      width:18px; height:18px; border-radius:50%;
+      background:var(--gold); box-shadow:0 1px 4px rgba(26,39,68,0.2);
+      transition:transform 0.25s, background 0.25s;
+    }
+    .learn-toggle-wrap input:checked ~ .learn-toggle-track .learn-toggle-thumb {
+      transform:translateX(24px); background:var(--gold-light);
+    }
+
+    /* ── Theory Cards ── */
+    .theory-card {
+      margin: 1.2rem 0 2rem;
+      padding: 1.4rem 1.8rem;
+      background: linear-gradient(135deg, rgba(26,39,68,0.03) 0%, rgba(184,146,42,0.05) 100%);
+      border: 1px solid rgba(184,146,42,0.25);
+      border-left: 4px solid var(--gold);
+      position: relative;
+    }
+    .theory-card-label {
+      font-size: 0.62rem; font-weight: 700; letter-spacing: 2.5px;
+      text-transform: uppercase; color: var(--gold); margin-bottom: 0.5rem;
+      font-family:'Lato',sans-serif;
+    }
+    .theory-card-title {
+      font-family:'EB Garamond',serif; font-size:1.05rem; font-weight:700;
+      color:var(--navy); margin-bottom:0.75rem;
+    }
+    .theory-card p {
+      font-size:0.88rem; color:var(--muted); line-height:1.75;
+    }
+    .tc-enter { color:var(--accent-enter); font-weight:700; }
+    .tc-leave { color:var(--accent-leave); font-weight:700; }
+    .tc-pivot { color:var(--accent-pivot); font-weight:700; }
+    .tc-navy  { color:var(--navy); font-weight:700; }
+  </style>
+</head>
+
+<body>
+
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+  <div class="blob blob-3"></div>
+
+  <nav>
+    <a href="index.html" class="nav-logo">The<span>Optimalist</span></a>
+    <div class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="howitworks.html">How it Works</a>
+      <a href="solver.html">Simplex Solver</a>
+      <a href="graphical.html" class="active">Graphical</a>
+      <a href="team.html">Meet the Team</a>
+    </div>
+  </nav>
+
+  <main class="page">
+    <div class="page-header">
+      <div class="page-tag">Interactive Solver</div>
+      <h1 class="page-title">Simplex Method Solver</h1>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Problem Setup</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Number of decision variables</label>
+          <input type="number" id="numVars" min="1" max="10" value="2">
+        </div>
+        <div class="form-group">
+          <label>Number of constraints</label>
+          <input type="number" id="numCons" min="1" max="10" value="2">
+        </div>
+        <div class="form-group">
+          <label>Objective</label>
+          <div class="radio-group">
+            <div class="radio-btn"><input type="radio" name="objective" id="objMax" value="max" checked><label
+                for="objMax">Maximize</label></div>
+            <div class="radio-btn"><input type="radio" name="objective" id="objMin" value="min"><label
+                for="objMin">Minimize</label></div>
+          </div>
+        </div>
+      </div>
+      <button class="btn-solve" id="btnGenerate" style="max-width:220px" onclick="generateForm()">Generate Input Fields →</button>
+    </div>
+
+    <div id="formArea" style="display:none">
+      <div class="panel">
+        <div class="panel-title">Objective Function Coefficients</div>
+        <div class="coeff-table-wrap">
+          <table class="coeff-table">
+            <thead>
+              <tr id="objHeader"></tr>
+            </thead>
+            <tbody>
+              <tr id="objRow">
+                <td class="row-label">Z&nbsp;=</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Variable Sign Constraints</div>
+        <div id="varSigns" style="display:flex;gap:1rem;flex-wrap:wrap;"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Constraints</div>
+        <div class="coeff-table-wrap">
+          <table class="coeff-table">
+            <thead>
+              <tr id="conHeader"></tr>
+            </thead>
+            <tbody id="conBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <button class="btn-solve" id="btnConfirm" style="margin-bottom:1.5rem" onclick="confirmConstraints()">Confirm Constraints &amp; Choose Method →</button>
+    </div>
+
+    <!-- Method Selection Panel (appears after constraints are confirmed) -->
+    <div id="methodPanel" style="display:none">
+      <div class="panel">
+        <div class="panel-title">Method Selection</div>
+        <div class="form-row" style="align-items:flex-start;gap:1.5rem;flex-wrap:wrap;">
+          <div class="form-group" style="flex:0 0 auto;">
+            <label>Solving Method</label>
+            <div class="radio-group" id="methodRadioGroup">
+              <div class="radio-btn"><input type="radio" name="method" id="mBigM" value="bigm" checked><label for="mBigM">Big-M</label></div>
+              <div class="radio-btn"><input type="radio" name="method" id="mTwo" value="twophase"><label for="mTwo">Two-Phase</label></div>
+            </div>
+          </div>
+          <div id="methodInsightBox" style="display:none;flex:1;min-width:260px;padding:0.9rem 1.2rem;border-left:3px solid var(--gold);background:rgba(184,146,42,0.06);font-size:0.87rem;color:#5a3e0a;line-height:1.6;"></div>
+        </div>
+      </div>
+
+      <div class="error-msg" id="errorMsg"></div>
+
+      <button class="btn-solve" id="btnSolve" onclick="solveLP()">⚡ Solve</button>
+    </div>
+
+    <div id="results">
+      <div class="divider"></div>
+      <!-- Learn Mode Toggle -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;padding:1.1rem 1.6rem;background:rgba(255,255,255,0.8);border:1px solid var(--rule);border-top:3px solid var(--gold);">
+        <div>
+          <div style="font-family:'EB Garamond',serif;font-size:1.05rem;font-weight:700;color:var(--navy);letter-spacing:0.2px;">📖 Learn Mode</div>
+          <div style="font-size:0.78rem;color:var(--muted);margin-top:0.2rem;letter-spacing:0.3px;">Inject theory cards between iterations to understand each step</div>
+        </div>
+        <label class="learn-toggle-wrap" title="Toggle Learn Mode">
+          <input type="checkbox" id="learnModeToggle" onchange="onLearnModeChange()">
+          <span class="learn-toggle-track">
+            <span class="learn-toggle-thumb"></span>
+          </span>
+        </label>
+      </div>
+      <div id="resultsInner"></div>
+    </div>
+  </main>
+
+  <section class="team-section" id="team">
+    <div class="team-inner">
+      <div class="team-header">
+        <div class="team-label">The Builders</div>
+        <h2 class="team-title">Meet the Team</h2>
+      </div>
+      <div class="team-grid" id="teamGrid"></div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="footer-logo">TheOptimalist</div>
+    <div>Exact Fractions · Big-M &amp; Two-Phase</div>
+  </footer>
+
+  <script>
+    // ============================================================
+    //  FRACTION CLASS  (self-contained, no CDN required)
+    //  Supports: new Frac(number), new Frac(numerator, denominator)
+    //  Operations: add, sub, mul, div, neg, abs, eq, lt, gt, lte, gte
+    //  Properties: n (abs numerator), d (denominator), s (sign: 1 or -1)
+    // ============================================================
+    (function (global) {
+      'use strict';
+
+      function gcd(a, b) {
+        a = Math.abs(a); b = Math.abs(b);
+        while (b) { var t = b; b = a % b; a = t; }
+        return a;
+      }
+
+      function Frac(n, d) {
+        if (this === undefined || this === global) return new Frac(n, d);
+
+        if (n instanceof Frac) {
+          this.s = n.s; this.n = n.n; this.d = n.d;
+          return;
+        }
+
+        if (d === undefined) {
+          // Single argument: number, string, or "p/q"
+          if (typeof n === 'string') {
+            var parts = n.split('/');
+            if (parts.length === 2) {
+              var num = parseInt(parts[0].trim(), 10);
+              var den = parseInt(parts[1].trim(), 10);
+              if (isNaN(num) || isNaN(den) || den === 0) throw new Error('Invalid fraction: ' + n);
+              n = num; d = den;
+            } else {
+              n = parseFloat(n);
+              if (isNaN(n)) throw new Error('Invalid fraction: ' + arguments[0]);
+              d = 1;
+            }
+          } else if (typeof n === 'number') {
+            // Handle decimals by converting to fraction
+            if (!isFinite(n)) throw new Error('Fraction does not support Infinity/NaN');
+            var str = n.toString();
+            var dot = str.indexOf('.');
+            if (dot !== -1) {
+              var dec = str.length - dot - 1;
+              d = Math.pow(10, dec);
+              n = Math.round(n * d);
+            } else {
+              d = 1;
+            }
+          } else {
+            throw new Error('Invalid argument type for Fraction');
+          }
+        }
+
+        if (d === 0) throw new Error('Denominator cannot be zero');
+
+        var g = gcd(Math.abs(n), Math.abs(d));
+        var sign = (n < 0) !== (d < 0) ? -1 : 1;
+        this.s = sign;
+        this.n = Math.abs(n) / g;
+        this.d = Math.abs(d) / g;
+      }
+
+      Frac.prototype.toNumber = function () { return this.s * this.n / this.d; };
+      Frac.prototype.toString = function () {
+        if (this.d === 1) return String(this.s * this.n);
+        return (this.s * this.n) + '/' + this.d;
+      };
+
+      Frac.prototype.add = function (o) {
+        o = new Frac(o);
+        return new Frac(this.s * this.n * o.d + o.s * o.n * this.d, this.d * o.d);
+      };
+      Frac.prototype.sub = function (o) {
+        o = new Frac(o);
+        return new Frac(this.s * this.n * o.d - o.s * o.n * this.d, this.d * o.d);
+      };
+      Frac.prototype.mul = function (o) {
+        o = new Frac(o);
+        return new Frac(this.s * this.n * o.s * o.n, this.d * o.d);
+      };
+      Frac.prototype.div = function (o) {
+        o = new Frac(o);
+        if (o.n === 0) throw new Error('Division by zero');
+        return new Frac(this.s * this.n * o.s * o.d, this.d * o.n);
+      };
+      Frac.prototype.neg = function () { return new Frac(-this.s * this.n, this.d); };
+      Frac.prototype.abs = function () { return new Frac(this.n, this.d); };
+      Frac.prototype.eq = function (o) { o = new Frac(o); return this.s * this.n * o.d === o.s * o.n * this.d; };
+      Frac.prototype.lt = function (o) { o = new Frac(o); return this.s * this.n * o.d < o.s * o.n * this.d; };
+      Frac.prototype.gt = function (o) { o = new Frac(o); return this.s * this.n * o.d > o.s * o.n * this.d; };
+      Frac.prototype.lte = function (o) { o = new Frac(o); return this.s * this.n * o.d <= o.s * o.n * this.d; };
+      Frac.prototype.gte = function (o) { o = new Frac(o); return this.s * this.n * o.d >= o.s * o.n * this.d; };
+
+      // Expose globally as both "Fraction" (original code compat) and "Frac"
+      global.Fraction = Frac;
+      global.Frac = Frac;
+    })(window);
+
+
+    // ============================================================
+    //  SIMPLEX ENGINE  (formerly simplex.js — now inlined)
+    // ============================================================
+
+    /**
+     * fmt(val) — display a Fraction (or number) as a clean string.
+     * Fraction.s = sign (-1 or 1), Fraction.n = abs numerator, Fraction.d = denominator.
+     */
+    function fmt(val) {
+      try {
+        var f = (val instanceof Fraction) ? val : new Fraction(val);
+        var num = f.s * f.n;
+        return f.d === 1 ? String(num) : num + '/' + f.d;
+      } catch (e) { return String(val); }
+    }
+
+    /** frac(v) — safely convert any input to a Fraction */
+    function frac(v) {
+      if (v instanceof Fraction) return v;
+      return new Fraction(v);
+    }
+
+    const BIG_M = 1e6; // Used symbolically; stored as a Fraction for arithmetic
+
+    /**
+     * Main solver entry point.
+     * @param {Object} p
+     *   p.obj         – array of JS numbers (objective coefficients, already sign-adjusted)
+     *   p.constraints – array of rows (each row = array of JS numbers)
+     *   p.signs       – array of '<=', '>=', '='
+     *   p.rhs         – array of JS numbers (non-negative after caller's flip)
+     *   p.choice      – 'max' | 'min'
+     *   p.numVars     – number of original decision variables
+     *   p.numCons     – number of constraints
+     *   p.method      – 'bigm' | 'twophase'
+     */
+    function solve(p) {
+      var obj = p.obj.map(frac);
+      var A = p.constraints.map(function (row) { return row.map(frac); });
+      var b = p.rhs.map(frac);
+      var signs = p.signs;
+      var nv = p.numVars;
+      var nc = p.numCons;
+      var method = p.method || 'bigm';
+      var isMin = p.choice === 'min';
+
+      // For minimisation, negate objective → maximise −z
+      if (isMin) obj = obj.map(function (c) { return c.neg(); });
+
+      // ── Build augmented tableau ───────────────────────────────
+      // Columns: [x1..xn | slacks | artificials | RHS]
+      // We track column names and which are artificial.
+
+      var colNames = [];
+      for (var i = 0; i < nv; i++) colNames.push('x' + (i + 1));
+
+      var slackCount = 0, artCount = 0;
+      var slackCols = [];  // {row, col, coeff: +1/-1}
+      var artCols = [];  // {row, col}
+
+      // First pass: count slacks and artificials
+      for (var r = 0; r < nc; r++) {
+        var sg = signs[r];
+        if (sg === '<=') {
+          slackCols.push({ row: r, coeff: 1 });
+          slackCount++;
+        } else if (sg === '>=') {
+          slackCols.push({ row: r, coeff: -1 }); // surplus
+          slackCount++;
+          artCols.push({ row: r });
+          artCount++;
+        } else { // '='
+          artCols.push({ row: r });
+          artCount++;
+        }
+      }
+
+      // Assign column indices
+      var slackStart = nv;
+      var artStart = nv + slackCount;
+      var totalCols = nv + slackCount + artCount; // excluding RHS
+      var RHS = totalCols; // index of RHS column
+
+      // Column names for slacks and artificials
+      for (var k = 0; k < slackCount; k++) colNames.push('s' + (k + 1));
+      for (var k = 0; k < artCount; k++) colNames.push('a' + (k + 1));
+      colNames.push('RHS');
+
+      var notes = [];
+      for (var k = 0; k < slackCount; k++) {
+        notes.push('s' + (k + 1) + ' = slack/surplus variable for constraint ' + (k + 1));
+      }
+      for (var k = 0; k < artCount; k++) {
+        notes.push('a' + (k + 1) + ' = artificial variable (≥ or = constraint)');
+      }
+
+      // Tableau rows: row 0 = objective row, rows 1..nc = constraints
+      // Each row has (totalCols+1) entries [col0..colN, RHS]
+      var TAB = [];
+      for (var r = 0; r <= nc; r++) {
+        var row = [];
+        for (var c = 0; c <= totalCols; c++) row.push(frac(0));
+        TAB.push(row);
+      }
+
+      // Fill constraint rows
+      var sIdx = slackStart, aIdx = artStart;
+      for (var r = 0; r < nc; r++) {
+        for (var c = 0; c < nv; c++) TAB[r + 1][c] = A[r][c];
+        TAB[r + 1][RHS] = b[r];
+
+        var sg = signs[r];
+        if (sg === '<=') {
+          TAB[r + 1][sIdx] = frac(1);
+          sIdx++;
+        } else if (sg === '>=') {
+          TAB[r + 1][sIdx] = frac(-1); // surplus
+          TAB[r + 1][aIdx] = frac(1);  // artificial
+          sIdx++; aIdx++;
+        } else { // '='
+          TAB[r + 1][aIdx] = frac(1);
+          aIdx++;
+        }
+      }
+
+      // Basis: initially slacks or artificials
+      var basis = []; // basis[r] = column index for constraint row r+1
+      sIdx = slackStart; aIdx = artStart;
+      for (var r = 0; r < nc; r++) {
+        var sg = signs[r];
+        if (sg === '<=') {
+          basis.push(sIdx++);
+        } else if (sg === '>=') {
+          sIdx++; // surplus not in basis
+          basis.push(aIdx++);
+        } else {
+          basis.push(aIdx++);
+        }
+      }
+
+      // Set of artificial column indices
+      var artSet = new Set();
+      for (var c = artStart; c < artStart + artCount; c++) artSet.add(c);
+
+      var steps = [];
+
+      if (method === 'twophase') {
+        return solvetwophase(TAB, basis, obj, nv, nc, totalCols, RHS, artSet, artStart, artCount, slackStart, slackCount, colNames, notes, isMin, p.choice);
+      } else {
+        return solveBigM(TAB, basis, obj, nv, nc, totalCols, RHS, artSet, artStart, artCount, colNames, notes, isMin, p.choice);
+      }
+    }
+
+    // ── Big-M method ────────────────────────────────────────────
+
+    function solveBigM(TAB, basis, obj, nv, nc, totalCols, RHS, artSet, artStart, artCount, colNames, notes, isMin, choice) {
+      var M = frac(BIG_M);
+      var steps = [];
+
+      // Build Z row: negate objective (max form), add M * artificials
+      for (var c = 0; c < nv; c++) {
+        TAB[0][c] = obj[c].neg();
+      }
+      for (var c = artStart; c < artStart + artCount; c++) {
+        TAB[0][c] = M;
+      }
+
+      // Eliminate artificials from Z row using current basis rows
+      for (var r = 0; r < nc; r++) {
+        if (artSet.has(basis[r])) {
+          var artCol = basis[r];
+          var coeff = TAB[0][artCol]; // should be M
+          for (var c = 0; c <= totalCols; c++) {
+            TAB[0][c] = TAB[0][c].sub(coeff.mul(TAB[r + 1][c]));
+          }
+        }
+      }
+
+      var iteration = 0;
+      var MAX_ITER = 200;
+
+      while (iteration < MAX_ITER) {
+        // Find entering variable: most negative Z-row coefficient (excluding RHS)
+        var pivotCol = -1;
+        var mostNeg = frac(0);
+        for (var c = 0; c < totalCols; c++) {
+          if (TAB[0][c].lt(mostNeg)) {
+            mostNeg = TAB[0][c];
+            pivotCol = c;
+          }
+        }
+
+        if (pivotCol === -1) {
+          // Optimal
+          var snap = snapshotTableau(TAB, basis, colNames, nc, totalCols, RHS, -1, -1, null, true);
+          steps.push({ type: 'optimal', iteration: iteration, label: 'Big-M', message: 'All reduced costs ≥ 0. Optimal tableau.', tableau: snap.tab, basics: snap.bas, colNames: colNames.slice() });
+
+          // Check infeasibility: any artificial still in basis with value > 0?
+          for (var r = 0; r < nc; r++) {
+            if (artSet.has(basis[r]) && TAB[r + 1][RHS].gt(frac(0))) {
+              return { status: 'infeasible', steps, notes, solution: null };
+            }
+          }
+
+          return buildSolution(TAB, basis, colNames, obj, choice, nv, nc, totalCols, RHS, steps, notes, isMin, artSet);
+        }
+
+        // Minimum ratio test
+        var pivotRow = -1;
+        var minRatio = null;
+        var ratios = new Array(nc).fill(undefined);
+
+        for (var r = 1; r <= nc; r++) {
+          var elem = TAB[r][pivotCol];
+          if (elem.gt(frac(0))) {
+            var ratio = TAB[r][RHS].div(elem);
+            ratios[r - 1] = fmt(ratio);
+            if (minRatio === null || ratio.lt(minRatio)) {
+              minRatio = ratio;
+              pivotRow = r;
+            }
+          } else {
+            ratios[r - 1] = '—';
+          }
+        }
+
+        if (pivotRow === -1) {
+          steps.push({ type: 'unbounded', message: 'No positive elements in pivot column. Problem is unbounded.' });
+          return { status: 'unbounded', steps, notes, solution: null };
+        }
+
+        var pivotVal = TAB[pivotRow][pivotCol];
+        var isArtLeaving = artSet.has(basis[pivotRow - 1]);
+
+        var snap = snapshotTableau(TAB, basis, colNames, nc, totalCols, RHS, pivotCol, pivotRow, ratios, false);
+        steps.push({
+          type: 'pivot', iteration: iteration + 1, label: 'Big-M',
+          entering: colNames[pivotCol], leaving: colNames[basis[pivotRow - 1]],
+          isArtLeaving, pivotVal: fmt(pivotVal),
+          tableau: snap.tab, basics: snap.bas, colNames: colNames.slice(), ratios
+        });
+
+        // Pivot
+        pivot(TAB, basis, pivotRow, pivotCol, nc, totalCols, RHS);
+        iteration++;
+      }
+
+      steps.push({ type: 'infeasible', message: 'Maximum iterations reached.' });
+      return { status: 'infeasible', steps, notes, solution: null };
+    }
+
+    // ── Two-Phase method ────────────────────────────────────────
+
+    function solvetwophase(TAB, basis, obj, nv, nc, totalCols, RHS, artSet, artStart, artCount, slackStart, slackCount, colNames, notes, isMin, choice) {
+      var steps = [];
+
+      if (artCount === 0) {
+        // No artificials — skip Phase 1, go straight to Phase 2
+        return runPhase2(TAB, basis, obj, nv, nc, totalCols, RHS, artSet, colNames, notes, isMin, choice, steps);
+      }
+
+      // ── Phase 1: minimise sum of artificials ──
+      // Phase 1 Z row: 0 for original/slack vars, 1 for artificials
+      for (var c = 0; c <= totalCols; c++) TAB[0][c] = frac(0);
+      for (var c = artStart; c < artStart + artCount; c++) TAB[0][c] = frac(-1); // we maximise −(sum art)
+
+      // Eliminate artificials from Z row
+      for (var r = 0; r < nc; r++) {
+        if (artSet.has(basis[r])) {
+          var coeff = TAB[0][basis[r]];
+          for (var c = 0; c <= totalCols; c++) {
+            TAB[0][c] = TAB[0][c].sub(coeff.mul(TAB[r + 1][c]));
+          }
+        }
+      }
+
+      var iteration = 0;
+      var MAX_ITER = 200;
+
+      while (iteration < MAX_ITER) {
+        var pivotCol = -1;
+        var mostNeg = frac(0);
+        for (var c = 0; c < totalCols; c++) {
+          if (TAB[0][c].lt(mostNeg)) {
+            mostNeg = TAB[0][c];
+            pivotCol = c;
+          }
+        }
+
+        if (pivotCol === -1) {
+          // Phase 1 optimal
+          var snap = snapshotTableau(TAB, basis, colNames, nc, totalCols, RHS, -1, -1, null, true);
+          steps.push({ type: 'optimal', iteration: iteration, label: 'Phase 1', message: 'Phase 1 complete.', tableau: snap.tab, basics: snap.bas, colNames: colNames.slice() });
+
+          // Check: if Phase 1 objective ≠ 0, infeasible
+          if (TAB[0][RHS].abs().gt(frac(1e-9))) {
+            steps.push({ type: 'infeasible', message: 'Phase 1 objective > 0: problem is infeasible.' });
+            return { status: 'infeasible', steps, notes, solution: null };
+          }
+          break;
+        }
+
+        var pivotRow = -1, minRatio = null;
+        var ratios = new Array(nc).fill(undefined);
+        for (var r = 1; r <= nc; r++) {
+          var elem = TAB[r][pivotCol];
+          if (elem.gt(frac(0))) {
+            var ratio = TAB[r][RHS].div(elem);
+            ratios[r - 1] = fmt(ratio);
+            if (minRatio === null || ratio.lt(minRatio)) { minRatio = ratio; pivotRow = r; }
+          } else { ratios[r - 1] = '—'; }
+        }
+
+        if (pivotRow === -1) {
+          steps.push({ type: 'unbounded', message: 'Unbounded in Phase 1 (should not happen).' });
+          return { status: 'infeasible', steps, notes, solution: null };
+        }
+
+        var pivotVal = TAB[pivotRow][pivotCol];
+        var isArtLeaving = artSet.has(basis[pivotRow - 1]);
+        var snap = snapshotTableau(TAB, basis, colNames, nc, totalCols, RHS, pivotCol, pivotRow, ratios, false);
+        steps.push({
+          type: 'pivot', iteration: iteration + 1, label: 'Phase 1',
+          entering: colNames[pivotCol], leaving: colNames[basis[pivotRow - 1]],
+          isArtLeaving, pivotVal: fmt(pivotVal),
+          tableau: snap.tab, basics: snap.bas, colNames: colNames.slice(), ratios
+        });
+
+        pivot(TAB, basis, pivotRow, pivotCol, nc, totalCols, RHS);
+        iteration++;
+      }
+
+      // ── Phase 2 ──
+      return runPhase2(TAB, basis, obj, nv, nc, totalCols, RHS, artSet, colNames, notes, isMin, choice, steps);
+    }
+
+    function runPhase2(TAB, basis, obj, nv, nc, totalCols, RHS, artSet, colNames, notes, isMin, choice, steps) {
+      // Restore Phase 2 objective row
+      for (var c = 0; c <= totalCols; c++) TAB[0][c] = frac(0);
+      for (var c = 0; c < nv; c++) TAB[0][c] = obj[c].neg();
+
+      // Zero out artificial columns in Z row (they're driven out)
+      for (var c of artSet) TAB[0][c] = frac(0);
+
+      // Eliminate basic variables from Z row
+      for (var r = 0; r < nc; r++) {
+        var bCol = basis[r];
+        var coeff = TAB[0][bCol];
+        if (!coeff.eq(frac(0))) {
+          for (var c = 0; c <= totalCols; c++) {
+            TAB[0][c] = TAB[0][c].sub(coeff.mul(TAB[r + 1][c]));
+          }
+        }
+      }
+
+      var iteration = 0;
+      var MAX_ITER = 200;
+
+      while (iteration < MAX_ITER) {
+        // Find entering: most negative in Z row (skip artificial cols)
+        var pivotCol = -1, mostNeg = frac(0);
+        for (var c = 0; c < totalCols; c++) {
+          if (!artSet.has(c) && TAB[0][c].lt(mostNeg)) {
+            mostNeg = TAB[0][c];
+            pivotCol = c;
+          }
+        }
+
+        if (pivotCol === -1) {
+          var snap = snapshotTableau(TAB, basis, colNames, nc, totalCols, RHS, -1, -1, null, true);
+          steps.push({ type: 'optimal', iteration: iteration, label: 'Phase 2', message: 'All reduced costs ≥ 0. Optimal.', tableau: snap.tab, basics: snap.bas, colNames: colNames.slice() });
+          return buildSolution(TAB, basis, colNames, obj, choice, nv, nc, totalCols, RHS, steps, notes, isMin, artSet);
+        }
+
+        var pivotRow = -1, minRatio = null;
+        var ratios = new Array(nc).fill(undefined);
+        for (var r = 1; r <= nc; r++) {
+          var elem = TAB[r][pivotCol];
+          if (elem.gt(frac(0))) {
+            var ratio = TAB[r][RHS].div(elem);
+            ratios[r - 1] = fmt(ratio);
+            if (minRatio === null || ratio.lt(minRatio)) { minRatio = ratio; pivotRow = r; }
+          } else { ratios[r - 1] = '—'; }
+        }
+
+        if (pivotRow === -1) {
+          steps.push({ type: 'unbounded', message: 'No positive elements in pivot column. Unbounded.' });
+          return { status: 'unbounded', steps, notes, solution: null };
+        }
+
+        var pivotVal = TAB[pivotRow][pivotCol];
+        var isArtLeaving = artSet.has(basis[pivotRow - 1]);
+        var snap = snapshotTableau(TAB, basis, colNames, nc, totalCols, RHS, pivotCol, pivotRow, ratios, false);
+        steps.push({
+          type: 'pivot', iteration: iteration + 1, label: 'Phase 2',
+          entering: colNames[pivotCol], leaving: colNames[basis[pivotRow - 1]],
+          isArtLeaving, pivotVal: fmt(pivotVal),
+          tableau: snap.tab, basics: snap.bas, colNames: colNames.slice(), ratios
+        });
+
+        pivot(TAB, basis, pivotRow, pivotCol, nc, totalCols, RHS);
+        iteration++;
+      }
+
+      steps.push({ type: 'infeasible', message: 'Max iterations reached in Phase 2.' });
+      return { status: 'infeasible', steps, notes, solution: null };
+    }
+
+    // ── Pivot operation ─────────────────────────────────────────
+
+    function pivot(TAB, basis, pivotRow, pivotCol, nc, totalCols, RHS) {
+      var pivotElem = TAB[pivotRow][pivotCol];
+      // Normalise pivot row
+      for (var c = 0; c <= totalCols; c++) {
+        TAB[pivotRow][c] = TAB[pivotRow][c].div(pivotElem);
+      }
+      // Eliminate column in all other rows
+      for (var r = 0; r <= nc; r++) {
+        if (r === pivotRow) continue;
+        var factor = TAB[r][pivotCol];
+        if (factor.eq(frac(0))) continue;
+        for (var c = 0; c <= totalCols; c++) {
+          TAB[r][c] = TAB[r][c].sub(factor.mul(TAB[pivotRow][c]));
+        }
+      }
+      basis[pivotRow - 1] = pivotCol;
+    }
+
+    // ── Snapshot tableau for step display ───────────────────────
+
+    function snapshotTableau(TAB, basis, colNames, nc, totalCols, RHS, pivotCol, pivotRow, ratios, isOptimal) {
+      var tab = [];
+      for (var r = 0; r <= nc; r++) {
+        var row = [];
+        for (var c = 0; c <= totalCols; c++) {
+          row.push(fmt(TAB[r][c]));
+        }
+        tab.push(row);
+      }
+      return { tab, bas: basis.slice() };
+    }
+
+    // ── Build solution object ────────────────────────────────────
+
+    function buildSolution(TAB, basis, colNames, obj, choice, nv, nc, totalCols, RHS, steps, notes, isMin, artSet) {
+      var vals = new Array(totalCols).fill(null).map(function () { return frac(0); });
+      for (var r = 0; r < nc; r++) {
+        vals[basis[r]] = TAB[r + 1][RHS];
+      }
+
+      var vars = [];
+      for (var i = 0; i < nv; i++) {
+        vars.push({ name: 'x' + (i + 1), value: fmt(vals[i]) });
+      }
+
+      // Z = original objective dot solution (not the negated one)
+      var z = frac(0);
+      for (var i = 0; i < nv; i++) {
+        var coeff = isMin ? obj[i].neg() : obj[i];
+        z = z.add(coeff.mul(vals[i]));
+      }
+
+      return {
+        status: 'optimal',
+        steps,
+        notes,
+        solution: {
+          vars,
+          z: fmt(z),
+          direction: choice === 'max' ? 'maximised' : 'minimised'
+        }
+      };
+    }
+
+
+    // ============================================================
+    //  UI LAYER
+    // ============================================================
+
+    const TEAM = [
+      { name: "Team Member 1", role: "Algorithm Design" },
+      { name: "Team Member 2", role: "Frontend & UI" },
+      { name: "Team Member 3", role: "Math & Validation" },
+      { name: "Team Member 4", role: "Testing & Docs" },
+    ];
+
+    (function buildTeam() {
+      const grid = document.getElementById('teamGrid');
+      TEAM.forEach(m => {
+        const initials = m.name.split(' ').map(w => w[0]).join('').slice(0, 2);
+        grid.innerHTML += `
+        <div class="team-card">
+          <div class="team-avatar">${initials}</div>
+          <div class="team-name">${m.name}</div>
+          <div class="team-role">${m.role}</div>
+        </div>`;
+      });
+    })();
+
+    let numVars = 2, numCons = 2;
+
+    function generateForm() {
+      numVars = parseInt(document.getElementById('numVars').value) || 2;
+      numCons = parseInt(document.getElementById('numCons').value) || 2;
+
+      if (numVars < 1 || numVars > 10 || numCons < 1 || numCons > 10) {
+        showError('Please enter 1–10 variables and 1–10 constraints.');
+        return;
+      }
+
+      const objHeader = document.getElementById('objHeader');
+      objHeader.innerHTML = '<th></th>';
+      for (let i = 1; i <= numVars; i++) objHeader.innerHTML += `<th>x${i}</th>`;
+
+      const objRow = document.getElementById('objRow');
+      objRow.innerHTML = '<td class="row-label">Z&nbsp;=</td>';
+      for (let i = 1; i <= numVars; i++) {
+        objRow.innerHTML += `<td><input type="text" id="obj_${i}" value="0" placeholder="0"></td>`;
+      }
+
+      const vsDiv = document.getElementById('varSigns');
+      vsDiv.innerHTML = '';
+      for (let i = 1; i <= numVars; i++) {
+        vsDiv.innerHTML += `
+        <div class="form-group" style="min-width:130px;max-width:160px">
+          <label>x${i} bound</label>
+          <select id="sign_${i}">
+            <option value="pos">x${i} ≥ 0</option>
+            <option value="neg">x${i} ≤ 0</option>
+            <option value="free">Unrestricted</option>
+          </select>
+        </div>`;
+      }
+
+      const conHeader = document.getElementById('conHeader');
+      conHeader.innerHTML = '<th>Row</th>';
+      for (let i = 1; i <= numVars; i++) conHeader.innerHTML += `<th>x${i}</th>`;
+      conHeader.innerHTML += '<th>Sign</th><th>RHS</th>';
+
+      const conBody = document.getElementById('conBody');
+      conBody.innerHTML = '';
+      for (let r = 1; r <= numCons; r++) {
+        let row = `<tr><td class="row-label">C${r}</td>`;
+        for (let i = 1; i <= numVars; i++) {
+          row += `<td><input type="text" id="con_${r}_${i}" value="0" placeholder="0"></td>`;
+        }
+        row += `<td><select id="sign_c${r}">
+                <option value="<=">≤</option>
+                <option value="=">=</option>
+                <option value=">=">≥</option>
+              </select></td>`;
+        row += `<td><input type="text" id="rhs_${r}" value="0" placeholder="0" style="max-width:80px"></td>`;
+        row += '</tr>';
+        conBody.innerHTML += row;
+      }
+
+      document.getElementById('methodPanel').style.display = 'none';
+      document.getElementById('formArea').style.display = 'block';
+      document.getElementById('results').style.display = 'none';
+      document.getElementById('resultsInner').innerHTML = '';
+      window._autoSimplexMode = false;
+      hideError();
+      document.getElementById('formArea').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function confirmConstraints() {
+      const profile = getConstraintProfile();
+      const methodPanel = document.getElementById('methodPanel');
+
+      if (profile.hasGEorEQ) {
+        // >= or = present: show Big-M / Two-Phase choice
+        methodPanel.style.display = 'block';
+        const box = document.getElementById('methodInsightBox');
+        box.innerHTML = '💡 <strong>Method Required:</strong> Your constraints include <em>≥</em> or <em>=</em> — please choose <strong>Big-M</strong> or <strong>Two-Phase</strong> to handle artificial variables.';
+        box.style.borderLeftColor = 'var(--gold)';
+        box.style.background = 'rgba(184,146,42,0.06)';
+        box.style.color = '#5a3e0a';
+        box.style.display = 'block';
+        methodPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        // Only <= constraints: go straight to Simplex, no choice shown
+        methodPanel.style.display = 'none';
+        window._autoSimplexMode = true;
+        solveLP();
+      }
+    }
+
+    function getConstraintProfile() {
+      const numCons = parseInt(document.getElementById('numCons').value, 10) || 0;
+      let hasGEorEQ = false;
+      let hasOnlyLE = true;
+      for (let r = 1; r <= numCons; r++) {
+        const signEl = document.getElementById('sign_c' + r);
+        if (!signEl) continue;
+        const v = signEl.value;
+        if (v === '>=' || v === '=') { hasGEorEQ = true; hasOnlyLE = false; }
+        if (v !== '<=') hasOnlyLE = false;
+      }
+      return { hasGEorEQ, hasOnlyLE: !hasGEorEQ };
+    }
+
+    function updateMethodInsight() {
+      const selected = document.querySelector('input[name="method"]:checked');
+      if (!selected) return;
+      const method = selected.value;
+      const box = document.getElementById('methodInsightBox');
+      const profile = getConstraintProfile();
+
+      let msg = '';
+      if (method === 'simplex' && profile.hasGEorEQ) {
+        msg = `⚠️ <strong>Method Error:</strong> The standard Simplex method requires all constraints to be <em>≤</em> with non-negative RHS. Your problem contains <em>≥</em> or <em>=</em> constraints — please use <strong>Big-M</strong> or <strong>Two-Phase</strong> instead.`;
+        box.style.borderLeftColor = 'var(--accent-leave)';
+        box.style.background = 'rgba(184,50,50,0.06)';
+        box.style.color = '#5a1a1a';
+      } else if ((method === 'bigm' || method === 'twophase') && profile.hasOnlyLE) {
+        msg = `💡 <strong>Method Insight:</strong> This problem can be solved using the standard <strong>Simplex</strong> method. Big-M or Two-Phase methods are typically reserved for problems with <em>≥</em> or <em>=</em> constraints.`;
+        box.style.borderLeftColor = 'var(--gold)';
+        box.style.background = 'rgba(184,146,42,0.06)';
+        box.style.color = '#5a3e0a';
+      } else {
+        box.style.display = 'none';
+        return;
+      }
+      box.innerHTML = msg;
+      box.style.display = 'block';
+    }
+
+    // Attach method radio change listeners
+
+    function parseFrac(str) {
+      str = (str || '').trim();
+      if (str === '') return null;
+      if (str.includes('/')) {
+        const parts = str.split('/');
+        if (parts.length !== 2) return null;
+        const n = parseInt(parts[0].trim(), 10);
+        const d = parseInt(parts[1].trim(), 10);
+        if (isNaN(n) || isNaN(d) || d === 0) return null;
+        return n / d;
+      }
+      const num = parseFloat(str);
+      if (isNaN(num)) return null;
+      return num;
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('errorMsg');
+      el.textContent = msg;
+      el.classList.add('visible');
+    }
+    function hideError() {
+      document.getElementById('errorMsg').classList.remove('visible');
+    }
+
+    function solveLP() {
+      hideError();
+
+      const currentNumVars = parseInt(document.getElementById('numVars').value, 10) || 0;
+      const currentNumCons = parseInt(document.getElementById('numCons').value, 10) || 0;
+
+      if (!document.getElementById('obj_1')) {
+        showError('Please click "Generate Input Fields" first before solving.');
+        return;
+      }
+      if (!document.getElementById('obj_' + currentNumVars)) {
+        showError('Input fields are out of sync. Please click "Generate Input Fields" again.');
+        return;
+      }
+
+      numVars = currentNumVars;
+      numCons = currentNumCons;
+
+      const choice = document.querySelector('input[name="objective"]:checked').value;
+
+      // Determine method: auto simplex (all <=) or user-chosen Big-M / Two-Phase
+      let method;
+      if (window._autoSimplexMode) {
+        method = 'bigm'; // simplex maps to bigm internally (no artificials needed for all-<= problems)
+      } else {
+        const checkedMethod = document.querySelector('input[name="method"]:checked');
+        method = checkedMethod ? checkedMethod.value : 'bigm';
+      }
+
+      const obj = [];
+      for (let i = 1; i <= numVars; i++) {
+        const el = document.getElementById('obj_' + i);
+        if (!el) { showError('Field for x' + i + ' not found. Please regenerate.'); return; }
+        const raw = el.value.trim();
+        if (raw === '') { showError('Objective coefficient for x' + i + ' is empty.'); return; }
+        const v = parseFrac(raw);
+        if (v === null) { showError('Invalid objective coefficient for x' + i + ': "' + raw + '"'); return; }
+        obj.push(v);
+      }
+
+      const varSigns = {};
+      for (let i = 1; i <= numVars; i++) {
+        const el = document.getElementById('sign_' + i);
+        varSigns[i - 1] = el ? el.value : 'pos';
+      }
+
+      // ── Unrestricted variable splitting ──────────────────────────
+      // For 'free' variables substitute xi = xi+ − xi− (both ≥ 0).
+      // 'neg' variables: substitute xi = −xi', so all coefficients flip.
+      // expandedNumVars counts how many columns go into the solver.
+      let expandedNumVars = 0;
+      // freeExpMap[original_index] = index of xi+ in expanded list
+      const freeExpMap = {};
+      for (let i = 0; i < numVars; i++) {
+        if (varSigns[i] === 'free') {
+          freeExpMap[i] = expandedNumVars;
+          expandedNumVars += 2; // xi+ and xi−
+        } else {
+          expandedNumVars += 1;
+        }
+      }
+
+      // Build expanded objective coefficients
+      const effectiveObj = [];
+      for (let i = 0; i < numVars; i++) {
+        const c = obj[i];
+        if (varSigns[i] === 'neg') {
+          effectiveObj.push(-c);
+        } else if (varSigns[i] === 'free') {
+          effectiveObj.push(c);   // xi+
+          effectiveObj.push(-c);  // xi−
+        } else {
+          effectiveObj.push(c);
+        }
+      }
+
+      const constraints = [], signs = [], rhs = [];
+      for (let r = 1; r <= numCons; r++) {
+        const row = [];
+        for (let i = 1; i <= numVars; i++) {
+          const el = document.getElementById('con_' + r + '_' + i);
+          if (!el) { showError('Field C' + r + ' x' + i + ' not found. Please regenerate.'); return; }
+          const raw = el.value.trim();
+          if (raw === '') { showError('C' + r + ' x' + i + ' is empty.'); return; }
+          const v = parseFrac(raw);
+          if (v === null) { showError('Invalid value at C' + r + ' x' + i + ': "' + raw + '"'); return; }
+          if (varSigns[i - 1] === 'neg') {
+            row.push(-v);
+          } else if (varSigns[i - 1] === 'free') {
+            row.push(v);   // xi+
+            row.push(-v);  // xi−
+          } else {
+            row.push(v);
+          }
+        }
+        const rhsEl = document.getElementById('rhs_' + r);
+        if (!rhsEl) { showError('RHS for C' + r + ' not found. Please regenerate.'); return; }
+        const rhsRaw = rhsEl.value.trim();
+        if (rhsRaw === '') { showError('RHS for C' + r + ' is empty.'); return; }
+        const rhsV = parseFrac(rhsRaw);
+        if (rhsV === null) { showError('Invalid RHS for C' + r + ': "' + rhsRaw + '"'); return; }
+
+        const signEl = document.getElementById('sign_c' + r);
+        let finalSign = signEl ? signEl.value : '<=';
+
+        // Negative RHS → error (standard form requires b ≥ 0)
+        if (rhsV < 0) {
+          showError(`Constraint C${r} has a negative RHS (${rhsRaw}). The problem is infeasible as entered — please rewrite the constraint so the right-hand side is ≥ 0 (multiply both sides by −1 and flip the inequality).`);
+          return;
+        }
+
+        constraints.push(row);
+        signs.push(finalSign);
+        rhs.push(rhsV);
+      }
+
+      let result;
+      try {
+        result = solve({ obj: effectiveObj, constraints, signs, rhs, choice, numVars: expandedNumVars, numCons, method });
+      } catch (e) {
+        showError('Solver error: ' + e.message);
+        console.error(e);
+        return;
+      }
+
+      // ── Recover original variable values from expanded solution ──
+      // For free variables: xi = xi+ − xi− (from solver's expanded vars)
+      // Helper: parse a fraction-string like "-3/2" or "5" into a JS number
+      function toNum(s) {
+        s = String(s).trim();
+        const slash = s.indexOf('/');
+        if (slash !== -1) {
+          return parseInt(s.slice(0, slash), 10) / parseInt(s.slice(slash + 1), 10);
+        }
+        return parseFloat(s);
+      }
+
+      if (result.solution) {
+        const expVars = result.solution.vars; // expanded list from solver
+        const origVars = [];
+        let expIdx = 0;
+        for (let i = 0; i < numVars; i++) {
+          if (varSigns[i] === 'free') {
+            const pVal = toNum(expVars[expIdx].value);
+            const mVal = toNum(expVars[expIdx + 1].value);
+            origVars.push({ name: `x${i + 1}`, value: fmt(frac(pVal - mVal)) });
+            expIdx += 2;
+          } else if (varSigns[i] === 'neg') {
+            // xi = −xi', so negate back
+            const val = toNum(expVars[expIdx].value);
+            origVars.push({ name: `x${i + 1}`, value: fmt(frac(-val)) });
+            expIdx += 1;
+          } else {
+            origVars.push({ name: `x${i + 1}`, value: expVars[expIdx].value });
+            expIdx += 1;
+          }
+        }
+        result.solution.vars = origVars;
+      }
+
+      renderResults(result, choice, numVars, method, obj, constraints, signs, rhs, varSigns);
+    }
+
+    function buildTheoryCards(step, choice, stepIdx) {
+      const cards = [];
+
+      function makeCard(label, title, html) {
+        const el = document.createElement('div');
+        el.className = 'theory-card';
+        el.innerHTML = `<div class="theory-card-label">📐 Theory · ${label}</div>
+          <div class="theory-card-title">${title}</div>
+          <p>${html}</p>`;
+        return el;
+      }
+
+      if (step.type === 'pivot') {
+        // Z-Row / Reduced Costs card (first iteration only)
+        if (stepIdx === 0) {
+          cards.push(makeCard('The Z-Row & Reduced Costs',
+            'Why do we look for the most negative value?',
+            `The <span class="tc-navy">Z-row</span> of the tableau holds the <em>reduced costs</em> — how much the objective would change per unit increase of each non-basic variable. In a <strong>${choice === 'max' ? 'maximisation' : 'minimisation'}</strong> problem we look for the <span class="tc-enter">most negative reduced cost</span> in the Z-row: that variable currently contributes the most improvement to the objective if it enters the basis. A Z-row with no negative entries means we are already at the <span class="tc-navy">optimal solution</span> — no further improvement is possible.`
+          ));
+        }
+
+        // Pivot Rule card
+        const enterLabel = step.entering ? `<span class="tc-enter">${step.entering}</span>` : 'the entering variable';
+        const leaveLabel = step.leaving ? `<span class="tc-leave">${step.leaving}</span>` : 'the leaving variable';
+        cards.push(makeCard('The Pivot Rule',
+          `Entering ${step.entering || '?'} · Leaving ${step.leaving || '?'}`,
+          `The <span class="tc-pivot">pivot rule</span> uses <em>Gauss-Jordan elimination</em> to swap basis variables. Here, ${enterLabel} was chosen because it has the most negative reduced cost in the Z-row, promising the greatest objective gain. ${leaveLabel} was chosen by the <strong>Ratio Test</strong> — dividing each positive entry in the ${enterLabel} column into the corresponding RHS value and picking the <em>smallest non-negative ratio</em>. This keeps all RHS values ≥ 0 (feasibility is preserved). The <span class="tc-pivot">pivot element</span> (highlighted in gold: <strong>${step.pivotVal || '?'}</strong>) is then used to clear its column — every other row is updated by subtracting an appropriate multiple of the pivot row.`
+        ));
+
+        // Ratio Test card
+        if (step.ratios && step.ratios.length) {
+          const validRatios = step.ratios.filter(r => r !== '—' && r !== undefined && r !== null);
+          cards.push(makeCard('The Ratio Test (Minimum Ratio Rule)',
+            'Preventing infeasibility at every step',
+            `To decide which variable <em>leaves</em> the basis we compute: for each constraint row, divide the <span class="tc-navy">RHS</span> by the corresponding coefficient in the <span class="tc-enter">entering column</span> — but <strong>only if the coefficient is strictly positive</strong>. Negative or zero entries are ignored (they do not constrain the entering variable). The row with the <em>smallest non-negative ratio</em> is chosen as the pivot row, making ${leaveLabel} the leaving variable. This guarantees the new RHS values remain ≥ 0 and the basis stays feasible throughout the algorithm.`
+          ));
+        }
+      }
+
+      if (step.type === 'optimal') {
+        cards.push(makeCard('Optimality Condition',
+          'Why can we stop here?',
+          `The current tableau has <strong>no negative reduced costs</strong> in the Z-row. This means no non-basic variable can improve the objective — we have reached the <span class="tc-enter">optimal vertex</span> of the feasible region. By the <em>Fundamental Theorem of Linear Programming</em>, if an optimal solution exists it occurs at a vertex (basic feasible solution), and the Simplex method systematically moves along edges of the polytope, improving the objective at each step, until this condition is met.`
+        ));
+      }
+
+      return cards;
+    }
+
+    // Store last render args so Learn Mode toggle can re-render without re-solving
+    let _lastRenderArgs = null;
+
+    function onLearnModeChange() {
+      if (_lastRenderArgs) {
+        renderResults(..._lastRenderArgs);
+      }
+    }
+
+    function renderResults(result, choice, numVars, method, obj, constraints, signs, rhs, varSigns) {
+      // Persist args so Learn Mode toggle can re-render
+      _lastRenderArgs = [result, choice, numVars, method, obj, constraints, signs, rhs, varSigns];
+
+      const learnMode = document.getElementById('learnModeToggle') && document.getElementById('learnModeToggle').checked;
+      const area = document.getElementById('resultsInner');
+      area.innerHTML = '';
+
+      const resultsDiv = document.getElementById('results');
+      resultsDiv.style.display = 'block';
+
+      let summaryHTML = `<div class="panel"><div class="panel-title">Problem Summary</div>`;
+      const dir = choice === 'max' ? 'Maximise' : 'Minimise';
+      const objStr = obj.map((c, i) => `${fmt(c)}x${i + 1}`).join(' + ');
+      summaryHTML += `<p style="font-family:'JetBrains Mono',monospace;font-size:0.9rem;margin-bottom:1rem;color:var(--indigo)">${dir} Z = ${objStr}</p>`;
+      summaryHTML += `<p style="font-size:0.78rem;color:var(--muted);margin-bottom:0.6rem;letter-spacing:1px;text-transform:uppercase;font-weight:500">Subject to:</p>`;
+      for (let r = 0; r < constraints.length; r++) {
+        const lhs = constraints[r].map((c, j) => `${fmt(c)}x${j + 1}`).join(' + ');
+        summaryHTML += `<p style="font-family:'JetBrains Mono',monospace;font-size:0.85rem;color:var(--text);margin-bottom:0.3rem">${lhs} ${signs[r]} ${fmt(rhs[r])}</p>`;
+      }
+      summaryHTML += `<p style="font-size:0.78rem;color:var(--muted);margin:0.8rem 0 0.4rem;letter-spacing:1px;text-transform:uppercase;font-weight:500">Variable Bounds:</p>`;
+      for (let i = 0; i < numVars; i++) {
+        const s = varSigns[i];
+        const txt = s === 'pos' ? `x${i + 1} ≥ 0` : s === 'neg' ? `x${i + 1} ≤ 0` : `x${i + 1} unrestricted`;
+        summaryHTML += `<span style="display:inline-block;margin-right:1.5rem;font-family:'JetBrains Mono',monospace;font-size:0.83rem;color:var(--muted)">${txt}</span>`;
+      }
+      summaryHTML += `</div>`;
+
+      if (result.notes && result.notes.length) {
+        summaryHTML += `<div class="panel"><div class="panel-title">Variables Added</div>
+        <ul class="notes-list">${result.notes.map(n => `<li>${n}</li>`).join('')}</ul></div>`;
+      }
+
+      area.innerHTML += summaryHTML;
+
+      const stepsPanel = document.createElement('div');
+      stepsPanel.className = 'panel';
+      stepsPanel.innerHTML = '<div class="panel-title">Step-by-Step Iterations</div>';
+
+      for (let stepIdx = 0; stepIdx < result.steps.length; stepIdx++) {
+        const step = result.steps[stepIdx];
+        const block = document.createElement('div');
+        block.className = 'step-block';
+
+        const badgeClass = step.label && step.label.includes('Phase 1') ? 'badge-phase1'
+          : step.label && step.label.includes('Phase 2') ? 'badge-phase2'
+            : 'badge-bigm';
+
+        if (step.type === 'pivot' || step.type === 'optimal') {
+          const titleTxt = step.type === 'optimal' ? `Iteration ${step.iteration} — Optimal` : `Iteration ${step.iteration}`;
+          block.innerHTML = `<div class="step-header">
+          <span class="step-badge ${badgeClass}">${step.label || ''}</span>
+          <span class="step-title-text">${titleTxt}</span>
+        </div>`;
+
+          if (step.type === 'pivot') {
+            block.innerHTML += `<div class="pivot-info">
+            <span><span class="dot dot-enter"></span>Entering: <strong>${step.entering}</strong></span>
+            <span><span class="dot dot-leave"></span>Leaving: <strong>${step.leaving}</strong>${step.isArtLeaving ? ' <em style="color:var(--accent-leave)">(artificial)</em>' : ''}</span>
+            <span><span class="dot dot-pivot"></span>Pivot element: <strong>${step.pivotVal}</strong></span>
+          </div>`;
+          }
+
+          if (step.type === 'optimal') {
+            block.innerHTML += `<div class="msg-box msg-optimal">✓ ${step.message}</div>`;
+          }
+
+          block.innerHTML += renderTableau(step.tableau, step.basics, step.colNames, step.pivotCol, step.pivotRow, step.ratios, step.type === 'optimal');
+        }
+
+        if (step.type === 'infeasible') block.innerHTML = `<div class="msg-box msg-warn">⚠ ${step.message}</div>`;
+        if (step.type === 'unbounded') block.innerHTML = `<div class="msg-box msg-warn">⚠ ${step.message}</div>`;
+
+        stepsPanel.appendChild(block);
+
+        // ── Learn Mode: inject theory cards ──────────────────────
+        if (learnMode && (step.type === 'pivot' || step.type === 'optimal')) {
+          const cards = buildTheoryCards(step, choice, stepIdx);
+          cards.forEach(c => stepsPanel.appendChild(c));
+        }
+      }
+
+      area.appendChild(stepsPanel);
+
+      let banner;
+      if (result.status === 'optimal') {
+        banner = `<div class="result-banner optimal"><span class="banner-icon">✅</span><div>
+        <strong>Optimal solution found</strong><br>
+        <span style="font-size:0.85rem">The problem has a unique (or possibly multiple) optimal solution.</span>
+      </div></div>`;
+      } else if (result.status === 'unbounded') {
+        banner = `<div class="result-banner unbounded"><span class="banner-icon">♾️</span><div>
+        <strong>Problem is Unbounded</strong><br>
+        <span style="font-size:0.85rem">The objective can be increased/decreased indefinitely.</span>
+      </div></div>`;
+      } else {
+        banner = `<div class="result-banner infeasible"><span class="banner-icon">🚫</span><div>
+        <strong>Problem is Infeasible</strong><br>
+        <span style="font-size:0.85rem">No feasible solution exists.</span>
+      </div></div>`;
+      }
+
+      area.innerHTML += banner;
+
+      if (result.solution) {
+        const sol = result.solution;
+        let solHTML = `<div class="panel"><div class="panel-title">Optimal Solution</div><div class="solution-grid">`;
+        for (const v of sol.vars) {
+          solHTML += `<div class="solution-card"><div class="var-name">${v.name}</div><div class="var-val">${v.value}</div></div>`;
+        }
+        solHTML += `<div class="solution-card z-card"><div class="var-name">Z (${sol.direction})</div><div class="var-val">${sol.z}</div></div>`;
+        solHTML += `</div></div>`;
+        area.innerHTML += solHTML;
+      }
+
+      resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function renderTableau(tableau, basics, colNames, pivotCol, pivotRow, ratios, isOptimal) {
+      const showRatio = !isOptimal && pivotCol !== undefined && pivotCol !== null && pivotCol >= 0 && ratios && ratios.length > 0;
+
+      let html = `<div class="tableau-wrap"><table class="tableau-table"><thead><tr><th>Basis</th>`;
+      colNames.forEach((n, j) => {
+        const isEnterCol = !isOptimal && j === pivotCol;
+        html += `<th${isEnterCol ? ' class="th-enter"' : ''}>${n}</th>`;
+      });
+      if (showRatio) html += `<th class="th-ratio">Ratio</th>`;
+      html += `</tr></thead><tbody>`;
+
+      for (let r = 0; r < tableau.length; r++) {
+        const isZRow = r === 0;
+        const isLeaving = !isOptimal && r === pivotRow;
+        html += `<tr${isZRow ? ' class="row-z"' : isLeaving ? ' class="row-leaving"' : ''}>`;
+
+        const basisLabel = isZRow ? 'Z'
+          : (basics && basics[r - 1] !== undefined && basics[r - 1] < colNames.length
+            ? colNames[basics[r - 1]] : '?');
+        html += `<td>${basisLabel}</td>`;
+
+        tableau[r].forEach((val, j) => {
+          const isPivotCell = !isOptimal && r === pivotRow && j === pivotCol;
+          const isEnterCell = !isOptimal && !isZRow && j === pivotCol;
+          let cls = '';
+          if (isPivotCell) cls = ' class="cell-pivot"';
+          else if (isEnterCell) cls = ' class="td-enter-col"';
+          html += `<td${cls}>${val}</td>`;
+        });
+
+        if (showRatio) {
+          const ratio = r === 0 ? '' : (ratios[r - 1] !== undefined ? ratios[r - 1] : '—');
+          html += `<td class="td-ratio">${ratio}</td>`;
+        }
+
+        html += `</tr>`;
+      }
+
+      html += `</tbody></table></div>`;
+      return html;
+    }
+  </script>
+</body>
+
+</html>
