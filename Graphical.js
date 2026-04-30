@@ -50,9 +50,9 @@ function gGenerateForm() {
     const row = document.createElement('tr');
     row.innerHTML = `
       <td class="row-label">C${i + 1}</td>
-      <td><input type="text" class="g-a1" data-row="${i}" value="1" /></td>
+      <td><input type="text" class="g-a1" data-row="${i}" value="0" /></td>
       <td style="padding:0 0.3rem;font-family:'EB Garamond',serif;font-weight:700;color:var(--navy);">x₁ +</td>
-      <td><input type="text" class="g-a2" data-row="${i}" value="1" /></td>
+      <td><input type="text" class="g-a2" data-row="${i}" value="0" /></td>
       <td style="padding:0 0.3rem;font-family:'EB Garamond',serif;font-weight:700;color:var(--navy);">x₂</td>
       <td>
         <select class="g-sign" data-row="${i}">
@@ -61,7 +61,7 @@ function gGenerateForm() {
           <option value="eq">=</option>
         </select>
       </td>
-      <td><input type="text" class="g-rhs" data-row="${i}" value="${(i + 1) * 4}" /></td>
+      <td><input type="text" class="g-rhs" data-row="${i}" value="0" /></td>
     `;
     tbody.appendChild(row);
   }
