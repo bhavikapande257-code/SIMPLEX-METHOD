@@ -1,4 +1,4 @@
-"""Wherever DNNTC is written it means Does not need to change in big M or other cases"""
+
 def get_input(): #DNNTC
 
     coefficients = []
