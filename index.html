@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Optimalist — Linear Programming Solver</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Source+Code+Pro:wght@400;500&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --cream: #f5f0e8;
+      --parchment: #ede8dc;
+      --dark-parchment: #ddd5c5;
+      --navy: #1a2744;
+      --navy-mid: #2c3e6b;
+      --gold: #b8922a;
+      --gold-light: #d4a840;
+      --gold-pale: #f0e0b0;
+      --text: #1c1c1c;
+      --muted: #5a5040;
+      --rule: rgba(26,39,68,0.15);
+      --shadow: 0 2px 16px rgba(26,39,68,0.1);
+      --shadow-lg: 0 8px 40px rgba(26,39,68,0.14);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Lato', sans-serif;
+      color: var(--text);
+      min-height: 100vh;
+      background-color: var(--cream);
+      background-image:
+        linear-gradient(rgba(26,39,68,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(26,39,68,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* No blobs — keep for HTML structure compatibility */
+    .blob { display: none; }
+
+    /* Decorative top rule */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--navy), var(--gold), var(--navy));
+      z-index: 999;
+    }
+
+    /* NAV */
+    nav {
+      position: fixed; top: 4px; left: 0; right: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.9rem 3rem;
+      background: var(--navy);
+      border-bottom: 2px solid var(--gold);
+    }
+
+    .nav-logo {
+      font-family: 'EB Garamond', serif;
+      font-size: 1.45rem;
+      font-weight: 700;
+      color: var(--cream);
+      letter-spacing: 0.5px;
+    }
+    .nav-logo span { color: var(--gold-light); }
+
+    .nav-links a {
+      text-decoration: none;
+      color: rgba(245,240,232,0.7);
+      font-size: 0.85rem;
+      font-weight: 400;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin-left: 2.5rem;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--gold-light); }
+
+    /* HERO */
+    .hero {
+      position: relative; z-index: 1;
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      text-align: center;
+      padding: 8rem 2rem 4rem;
+      background: linear-gradient(180deg, rgba(245,240,232,0) 0%, rgba(237,232,220,0.6) 100%);
+    }
+
+    /* Decorative corner elements */
+    .hero::before, .hero::after {
+      content: '◆';
+      position: absolute;
+      font-size: 1.2rem;
+      color: var(--gold);
+      opacity: 0.4;
+    }
+    .hero::before { top: 120px; left: 3rem; }
+    .hero::after  { top: 120px; right: 3rem; }
+
+    .hero-tag {
+      display: inline-block;
+      background: transparent;
+      border: 1px solid var(--gold);
+      color: var(--navy);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      padding: 0.4rem 1.4rem;
+      margin-bottom: 2rem;
+      font-family: 'Lato', sans-serif;
+    }
+
+    .hero h1 {
+      font-family: 'EB Garamond', serif;
+      font-size: clamp(3rem, 8vw, 5.5rem);
+      font-weight: 600;
+      line-height: 1.1;
+      color: var(--navy);
+      max-width: 800px;
+      margin-bottom: 1.5rem;
+    }
+
+    .hero h1 em {
+      font-style: italic;
+      color: var(--gold);
+      position: relative;
+    }
+
+    .hero p {
+      font-size: 1.1rem;
+      color: var(--muted);
+      max-width: 520px;
+      line-height: 1.8;
+      margin-bottom: 2.5rem;
+      font-weight: 300;
+      font-family: 'Lato', sans-serif;
+    }
+
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.8rem;
+      background: var(--navy);
+      color: var(--cream);
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      padding: 0.9rem 2.8rem;
+      border: 2px solid var(--navy);
+      transition: background 0.2s ease, color 0.2s ease, border-color 0.2s;
+      position: relative;
+    }
+    .btn-primary:hover {
+      background: var(--gold);
+      border-color: var(--gold);
+      color: var(--navy);
+    }
+
+    .btn-arrow { font-size: 1rem; transition: transform 0.2s; }
+    .btn-primary:hover .btn-arrow { transform: translateX(4px); }
+
+    .hero-btns {
+      display: flex;
+      gap: 1.2rem;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.8rem;
+      background: transparent;
+      color: var(--navy);
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      padding: 0.9rem 2.8rem;
+      border: 2px solid var(--gold);
+      transition: background 0.2s ease, color 0.2s ease;
+    }
+    .btn-secondary:hover {
+      background: var(--gold);
+      color: var(--navy);
+    }
+    .btn-secondary .btn-arrow { font-size: 1rem; transition: transform 0.2s; }
+    .btn-secondary:hover .btn-arrow { transform: translateY(3px); }
+
+    /* SCROLL INDICATOR */
+    .scroll-hint {
+      position: absolute; bottom: 2rem;
+      display: flex; flex-direction: column; align-items: center;
+      gap: 0.4rem;
+      color: var(--muted); font-size: 0.7rem; letter-spacing: 2px;
+      animation: bounce 2s ease-in-out infinite;
+      text-transform: uppercase;
+    }
+    .scroll-hint svg { opacity: 0.4; }
+    @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(6px)} }
+
+    /* SECTION WRAPPER */
+    section { position: relative; z-index: 1; }
+
+    /* WHAT IS SIMPLEX */
+    .section-edu {
+      padding: 6rem 2rem;
+      background: var(--parchment);
+      border-top: 1px solid var(--rule);
+      border-bottom: 1px solid var(--rule);
+    }
+    .section-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .section-label {
+      font-size: 0.65rem;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: var(--gold);
+      font-weight: 700;
+      margin-bottom: 0.6rem;
+      font-family: 'Lato', sans-serif;
+    }
+    .section-title {
+      font-family: 'EB Garamond', serif;
+      font-size: clamp(2rem, 5vw, 3rem);
+      font-weight: 600;
+      color: var(--navy);
+      margin-bottom: 0.6rem;
+      line-height: 1.2;
+    }
+    /* Decorative rule under section titles */
+    .section-title::after {
+      content: '';
+      display: block;
+      width: 60px;
+      height: 2px;
+      background: var(--gold);
+      margin-top: 0.8rem;
+      margin-bottom: 1.2rem;
+    }
+    .section-desc {
+      color: var(--muted);
+      font-size: 1rem;
+      line-height: 1.85;
+      max-width: 680px;
+      margin-bottom: 3.5rem;
+      font-weight: 400;
+    }
+
+    /* ACADEMIC CARDS */
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 0;
+      border: 1px solid var(--rule);
+    }
+
+    .glass-card {
+      background: var(--cream);
+      border: none;
+      border-right: 1px solid var(--rule);
+      border-bottom: 1px solid var(--rule);
+      border-radius: 0;
+      padding: 2rem;
+      box-shadow: none;
+      transition: background 0.25s ease;
+      position: relative;
+    }
+    .glass-card:hover {
+      background: var(--gold-pale);
+      transform: none;
+      box-shadow: none;
+    }
+    .glass-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0;
+      width: 3px; height: 100%;
+      background: var(--gold);
+      opacity: 0;
+      transition: opacity 0.25s;
+    }
+    .glass-card:hover::before { opacity: 1; }
+
+    .card-icon {
+      font-size: 1.8rem;
+      margin-bottom: 1rem;
+      display: block;
+    }
+    .card-title {
+      font-family: 'EB Garamond', serif;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--navy);
+      margin-bottom: 0.6rem;
+      letter-spacing: 0.2px;
+    }
+    .card-text {
+      font-size: 0.9rem;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    /* HOW IT WORKS */
+    .section-how {
+      padding: 6rem 2rem;
+      background: var(--cream);
+    }
+    .steps-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 0;
+      margin-top: 3rem;
+      border: 1px solid var(--rule);
+    }
+    .step {
+      background: transparent;
+      border: none;
+      border-right: 1px solid var(--rule);
+      border-radius: 0;
+      padding: 2rem 1.8rem;
+      box-shadow: none;
+      position: relative;
+      overflow: hidden;
+    }
+    .step::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: var(--gold);
+    }
+    .step-num {
+      font-family: 'EB Garamond', serif;
+      font-size: 3.5rem;
+      font-weight: 400;
+      color: rgba(26,39,68,0.08);
+      line-height: 1;
+      margin-bottom: 0.5rem;
+    }
+    .step-title {
+      font-family: 'EB Garamond', serif;
+      font-weight: 700;
+      font-size: 1.05rem;
+      color: var(--navy);
+      margin-bottom: 0.5rem;
+    }
+    .step-text {
+      font-size: 0.875rem;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    /* FORMULA DISPLAY */
+    .formula-card {
+      background: var(--navy);
+      border: none;
+      border-radius: 0;
+      padding: 3rem;
+      box-shadow: var(--shadow-lg);
+      margin-top: 3.5rem;
+      display: flex;
+      align-items: flex-start;
+      gap: 3rem;
+      flex-wrap: wrap;
+    }
+    .formula-block { flex: 1; min-width: 200px; }
+    .formula-label {
+      font-size: 0.65rem;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--gold-light);
+      margin-bottom: 0.6rem;
+      font-weight: 700;
+      font-family: 'Lato', sans-serif;
+    }
+    .formula-text {
+      font-family: 'Source Code Pro', monospace;
+      font-size: 0.95rem;
+      color: var(--cream);
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(184,146,42,0.3);
+      padding: 1rem 1.4rem;
+      border-radius: 0;
+      line-height: 1.9;
+    }
+
+    /* CTA BAND */
+    .cta-band {
+      padding: 7rem 2rem;
+      text-align: center;
+      background: var(--parchment);
+      border-top: 1px solid var(--rule);
+      border-bottom: 1px solid var(--rule);
+    }
+    .cta-inner {
+      max-width: 660px;
+      margin: 0 auto;
+    }
+    .cta-band h2 {
+      font-family: 'EB Garamond', serif;
+      font-size: clamp(2rem, 5vw, 3rem);
+      font-weight: 600;
+      color: var(--navy);
+      margin-bottom: 1.2rem;
+    }
+    .cta-band p {
+      color: var(--muted);
+      font-size: 1.05rem;
+      margin-bottom: 2.5rem;
+      font-weight: 400;
+    }
+
+    /* FOOTER */
+    footer {
+      position: relative; z-index: 1;
+      padding: 1.8rem 3rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--navy);
+      border-top: 2px solid var(--gold);
+      font-size: 0.8rem;
+      color: rgba(245,240,232,0.5);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    footer .footer-logo {
+      font-family: 'EB Garamond', serif;
+      font-weight: 700;
+      font-size: 1.1rem;
+      color: var(--cream);
+      letter-spacing: 0.5px;
+      text-transform: none;
+    }
+
+    /* ANIMATIONS */
+    .fade-up {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+    .fade-up.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Background blobs -->
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+  <div class="blob blob-3"></div>
+
+  <!-- NAV -->
+  <nav>
+    <a href="index.html" class="nav-logo">The<span>Optimalist</span></a>
+    <div class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="howitworks.html">How it Works</a>
+      <a href="solver.html">Simplex Solver</a>
+      <a href="graphical.html" class="active">Graphical</a>
+      <a href="team.html">Meet the Team</a>
+    </div>
+  </nav>
+
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-tag">Linear Programming · Operations Research</div>
+    <h1>Solving linear optimization problems</h1>
+    <p>Enter your objective function, constraints, and variables. Get beautiful, fraction-exact tableau walkthroughs using Big-M or Two-Phase simplex.</p>
+    <div class="hero-btns">
+      <a href="solver.html" class="btn-primary">
+        Open the Solver <span class="btn-arrow">→</span>
+      </a>
+      <a href="howitworks.html" class="btn-secondary">
+        How it Works <span class="btn-arrow">↓</span>
+      </a>
+    </div>
+    <div class="scroll-hint">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+      SCROLL
+    </div>
+  </div>
+
+  <!-- WHAT IS SIMPLEX -->
+  <section class="section-edu">
+    <div class="section-inner">
+      <div class="fade-up">
+        <div class="section-label">The Method</div>
+        <h2 class="section-title">What is the Simplex Method?</h2>
+        <p class="section-desc">
+          The Simplex Method is an iterative algorithm for solving linear programming problems. Developed by George Dantzig in 1947, it navigates the vertices of the feasible polytope, improving the objective at each step until an optimal solution is found — or proves the problem is unbounded or infeasible.
+        </p>
+      </div>
+      <div class="cards-grid fade-up" style="transition-delay:0.15s">
+        <div class="glass-card">
+          <span class="card-icon">📐</span>
+          <div class="card-title">Standard Form</div>
+          <div class="card-text">Every LP is converted to standard form: equality constraints with non-negative slack, surplus, and artificial variables, forming a structured initial basic feasible solution.</div>
+        </div>
+        <div class="glass-card">
+          <span class="card-icon">🔄</span>
+          <div class="card-title">Pivot Operations</div>
+          <div class="card-text">At each iteration, an entering variable (most negative reduced cost) and leaving variable (minimum ratio test) are selected. The pivot element drives row operations to update the basis.</div>
+        </div>
+        <div class="glass-card">
+          <span class="card-icon">🎯</span>
+          <div class="card-title">Optimality Check</div>
+          <div class="card-text">The algorithm terminates when all reduced costs in the objective row are non-negative (for maximisation), guaranteeing the current basic feasible solution is globally optimal.</div>
+        </div>
+        <div class="glass-card">
+          <span class="card-icon">♾️</span>
+          <div class="card-title">Special Cases</div>
+          <div class="card-text">The solver detects unbounded problems (no positive pivot column entries) and infeasibility (Phase-1 objective > 0), reporting them with clear diagnostic messages.</div>
+        </div>
+        <div class="glass-card">
+          <span class="card-icon">📑</span>
+          <div class="card-title">Step-by-Step Iterations</div>
+          <div class="card-text">The solver generates a Full Tableau History, allowing users to trace every pivot step. Each iteration displays the current basis, basic feasible solution, and the Z-value, making it an ideal tool for learning the manual Simplex process.</div>
+        </div>
+        <div class="glass-card">
+          <span class="card-icon">📉</span>
+          <div class="card-title">Sensitivity Analysis</div>
+          <div class="card-text">Post-optimality analysis determines the allowable ranges for objective function coefficients and right-hand side values. It identifies how much a parameter can change before the current basis is no longer optimal or feasible.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta-band">
+    <div class="cta-inner fade-up">
+      <h2>Ready to solve your linear program?</h2>
+      <p>Exact fractions, step-by-step tableaus, and instant results — right in your browser.</p>
+      <a href="solver.html" class="btn-primary">
+        Launch Solver <span class="btn-arrow">→</span>
+      </a>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="footer-logo">TheOptimalist</div>
+    <div>Big-M &amp; Two-Phase · Exact Fraction Arithmetic</div>
+  </footer>
+
+  <script>
+    // Intersection observer for fade-up
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); } });
+    }, { threshold: 0.12 });
+    document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
+  </script>
+</body>
+</html>
