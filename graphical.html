@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Graphical Solver — TheOptimalist</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --cream: #f5f0e8;
+      --parchment: #ede8dc;
+      --dark-parchment: #ddd5c5;
+      --navy: #1a2744;
+      --navy-mid: #2c3e6b;
+      --gold: #b8922a;
+      --gold-light: #d4a840;
+      --gold-pale: #f5ead0;
+      --text: #1c1c1c;
+      --muted: #5a5040;
+      --rule: rgba(26,39,68,0.15);
+      --shadow: 0 2px 16px rgba(26,39,68,0.09);
+      --shadow-lg: 0 8px 40px rgba(26,39,68,0.12);
+      --accent-enter: #2a7a4e;
+      --accent-leave: #b83232;
+      --accent-pivot: #b8922a;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Lato', sans-serif;
+      color: var(--text);
+      min-height: 100vh;
+      background-color: var(--cream);
+      background-image:
+        linear-gradient(rgba(26,39,68,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(26,39,68,0.025) 1px, transparent 1px);
+      background-size: 40px 40px;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--navy), var(--gold), var(--navy));
+      z-index: 999;
+    }
+
+    nav {
+      position: sticky; top: 4px; z-index: 200;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.9rem 3rem;
+      background: var(--navy);
+      border-bottom: 2px solid var(--gold);
+    }
+    .nav-logo { font-family: 'EB Garamond', serif; font-size: 1.45rem; font-weight: 700; color: var(--cream); text-decoration: none; letter-spacing: 0.3px; }
+    .nav-logo span { color: var(--gold-light); }
+    .nav-links a { text-decoration: none; color: rgba(245,240,232,0.65); font-size: 0.8rem; font-weight: 400; letter-spacing: 1.5px; text-transform: uppercase; margin-left: 2.5rem; transition: color 0.2s; }
+    .nav-links a:hover, .nav-links a.active { color: var(--gold-light); }
+
+    .page { position: relative; z-index: 1; max-width: 1000px; margin: 0 auto; padding: 3rem 2rem 6rem; }
+
+    .page-header { text-align: center; margin-bottom: 3rem; }
+    .page-tag { display: inline-block; background: transparent; border: 1px solid var(--gold); color: var(--navy); font-size: 0.65rem; letter-spacing: 3px; text-transform: uppercase; padding: 0.35rem 1.2rem; margin-bottom: 1rem; font-family: 'Lato', sans-serif; font-weight: 700; }
+    .page-title { font-family: 'EB Garamond', serif; font-size: clamp(2rem, 5vw, 3rem); font-weight: 600; color: var(--navy); }
+    .page-sub { margin-top: 0.6rem; font-size: 0.9rem; color: var(--muted); }
+
+    .panel {
+      background: rgba(255,255,255,0.8);
+      border: 1px solid var(--rule);
+      border-top: 3px solid var(--gold);
+      border-radius: 0;
+      padding: 2.5rem;
+      box-shadow: var(--shadow);
+      margin-bottom: 2rem;
+    }
+    .panel-title {
+      font-family: 'EB Garamond', serif;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--navy);
+      margin-bottom: 1.8rem;
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      letter-spacing: 0.2px;
+    }
+    .panel-title::before {
+      content: '';
+      display: block;
+      width: 20px; height: 2px;
+      background: var(--gold);
+    }
+
+    .form-row { display: flex; gap: 1.2rem; flex-wrap: wrap; margin-bottom: 1.4rem; align-items: flex-end; }
+    .form-group { display: flex; flex-direction: column; gap: 0.4rem; flex: 1; min-width: 140px; }
+    .form-group label { font-size: 0.75rem; font-weight: 700; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+
+    input[type="number"],
+    input[type="text"],
+    select {
+      background: var(--cream);
+      border: 1.5px solid var(--rule);
+      border-radius: 0;
+      padding: 0.6rem 0.9rem;
+      font-size: 0.92rem;
+      color: var(--text);
+      font-family: 'Lato', sans-serif;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      width: 100%;
+    }
+    input:focus, select:focus {
+      border-color: var(--gold);
+      box-shadow: 0 0 0 2px rgba(184,146,42,0.12);
+    }
+
+    .radio-group { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .radio-btn input { display: none; }
+    .radio-btn label {
+      display: inline-block;
+      padding: 0.4rem 1rem;
+      border-radius: 0;
+      border: 1.5px solid var(--rule);
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.18s;
+      background: var(--cream);
+    }
+    .radio-btn input:checked + label {
+      background: var(--navy);
+      color: var(--cream);
+      border-color: var(--navy);
+    }
+
+    .btn-solve {
+      width: 100%;
+      padding: 0.95rem;
+      background: var(--navy);
+      color: var(--cream);
+      border: 2px solid var(--navy);
+      border-radius: 0;
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      font-family: 'Lato', sans-serif;
+      cursor: pointer;
+      box-shadow: none;
+      transition: background 0.2s, color 0.2s, border-color 0.2s;
+    }
+    .btn-solve:hover { background: var(--gold); border-color: var(--gold); color: var(--navy); }
+    .btn-solve:active { opacity: 0.9; }
+
+    /* Constraint builder table */
+    .g-con-table { border-collapse: collapse; width: 100%; }
+    .g-con-table th {
+      font-size: 0.7rem; font-weight: 700; color: var(--navy);
+      letter-spacing: 1.5px; text-transform: uppercase;
+      padding: 0.5rem 0.5rem 0.8rem;
+      text-align: center;
+      border-bottom: 2px solid var(--gold);
+      background: var(--parchment);
+    }
+    .g-con-table td { padding: 0.35rem 0.4rem; text-align: center; vertical-align: middle; }
+    .g-con-table input[type="text"] { text-align: center; padding: 0.5rem 0.4rem; font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; min-width: 60px; }
+    .g-con-table .row-label { font-family: 'EB Garamond', serif; font-size: 0.95rem; font-weight: 700; color: var(--navy); white-space: nowrap; text-align: left; padding-right: 0.6rem; }
+    .g-con-table select { padding: 0.5rem 0.3rem; min-width: 64px; font-size: 0.85rem; }
+    .g-con-table .op-sym { font-family: 'EB Garamond', serif; font-weight: 700; color: var(--navy); font-size: 1rem; }
+
+    /* Obj function row */
+    .obj-row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; font-family: 'JetBrains Mono', monospace; font-size: 0.95rem; color: var(--navy); }
+    .obj-row input { max-width: 80px; text-align: center; }
+    .obj-sym { font-family: 'EB Garamond', serif; font-weight: 700; font-size: 1.1rem; color: var(--navy); }
+
+    /* Result styles */
+    .result-banner {
+      border-radius: 0;
+      padding: 1.2rem 2rem;
+      margin-bottom: 1.5rem;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      border-left: 4px solid;
+    }
+    .result-banner.optimal  { background: rgba(42,122,78,0.07);  border-color: var(--accent-enter); color: #1a4a30; }
+    .result-banner.unbounded { background: rgba(184,146,42,0.08); border-color: var(--gold);         color: #5a3e0a; }
+    .result-banner.infeasible { background: rgba(184,50,50,0.07); border-color: var(--accent-leave); color: #5a1a1a; }
+    .result-banner .banner-icon { font-size: 1.6rem; }
+
+    .solution-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0; margin: 1.5rem 0; border: 1px solid var(--rule); }
+    .solution-card { background: var(--cream); border: none; border-right: 1px solid var(--rule); border-radius: 0; padding: 1.2rem; text-align: center; }
+    .solution-card .var-name { font-size: 0.7rem; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 0.4rem; font-weight: 700; }
+    .solution-card .var-val { font-family: 'JetBrains Mono', monospace; font-size: 1.4rem; font-weight: 500; color: var(--navy); }
+    .solution-card.z-card { background: var(--navy); border-color: var(--navy); }
+    .solution-card.z-card .var-name { color: var(--gold-light); }
+    .solution-card.z-card .var-val { color: var(--cream); }
+
+    .notes-list { list-style: none; padding: 0; }
+    .notes-list li { display: flex; align-items: flex-start; gap: 0.6rem; font-size: 0.88rem; color: var(--muted); padding: 0.45rem 0; border-bottom: 1px solid var(--rule); line-height: 1.6; }
+    .notes-list li:last-child { border-bottom: none; }
+    .notes-list li::before { content: '→'; color: var(--gold); flex-shrink: 0; margin-top: 2px; }
+
+    .divider { height: 1px; background: var(--rule); margin: 2rem 0; }
+
+    /* Info box */
+    .info-box {
+      background: rgba(26,39,68,0.04);
+      border-left: 3px solid var(--gold);
+      padding: 1rem 1.3rem;
+      font-size: 0.87rem;
+      color: var(--muted);
+      line-height: 1.65;
+      margin-bottom: 1.5rem;
+    }
+
+    footer { position: relative; z-index: 1; padding: 1.5rem 3rem; border-top: 2px solid var(--gold); background: var(--navy); display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: rgba(245,240,232,0.5); letter-spacing: 1px; text-transform: uppercase; }
+    footer .footer-logo { font-family: 'EB Garamond', serif; font-weight: 700; font-size: 1.1rem; color: var(--cream); letter-spacing: 0.3px; text-transform: none; }
+
+    @media(max-width:600px){
+      nav { padding: 0.8rem 1.2rem; }
+      .nav-links a { margin-left: 1rem; }
+      .panel { padding: 1.5rem; }
+      .page { padding: 2rem 1rem 5rem; }
+      .obj-row input { max-width: 60px; }
+    }
+  </style>
+</head>
+
+<body>
+
+  <nav>
+    <a href="index.html" class="nav-logo">The<span>Optimalist</span></a>
+    <div class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="howitworks.html">How it Works</a>
+      <a href="solver.html">Simplex Solver</a>
+      <a href="graphical.html">Graphical</a>
+      <a href="team.html">Meet the Team</a>
+    </div>
+  </nav>
+
+  <main class="page">
+    <div class="page-header">
+      <div class="page-tag">Two-Variable Method</div>
+      <h1 class="page-title">Graphical Method Solver</h1>
+      <p class="page-sub">Visualise the feasible region, corner points, and optimal solution on an interactive graph.</p>
+    </div>
+
+    <!-- ── STEP 1: Problem Setup ── -->
+    <div class="panel">
+      <div class="panel-title">Problem Setup</div>
+
+      <div class="info-box">
+        The graphical method works for linear programs with exactly <strong>two decision variables</strong> (x₁ and x₂).
+        It plots constraint boundaries as lines on a 2-D graph, identifies the feasible region, and evaluates the objective at each corner point.
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Number of Constraints</label>
+          <input type="number" id="gNumCons" min="1" max="8" value="2">
+        </div>
+        <div class="form-group">
+          <label>Objective</label>
+          <div class="radio-group">
+            <div class="radio-btn">
+              <input type="radio" name="gObjective" id="gObjMax" value="max" checked>
+              <label for="gObjMax">Maximize</label>
+            </div>
+            <div class="radio-btn">
+              <input type="radio" name="gObjective" id="gObjMin" value="min">
+              <label for="gObjMin">Minimize</label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn-solve" style="max-width:240px" onclick="gGenerateForm()">
+        Generate Input Fields →
+      </button>
+    </div>
+
+    <!-- ── STEP 2: Objective + Constraints ── -->
+    <div id="gFormArea" style="display:none">
+
+      <div class="panel">
+        <div class="panel-title">Objective Function</div>
+        <p style="font-size:0.78rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;font-weight:700;margin-bottom:1rem;">Z =</p>
+        <div class="obj-row">
+          <input type="text" id="gObj1" value="0" />
+          <span class="obj-sym">x₁</span>
+          <span class="obj-sym">+</span>
+          <input type="text" id="gObj2" value="0" />
+          <span class="obj-sym">x₂</span>
+        </div>
+        <p style="font-size:0.78rem;color:var(--muted);margin-top:0.8rem;">Non-negativity constraints x₁ ≥ 0, x₂ ≥ 0 are always assumed.</p>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Constraints</div>
+        <div style="overflow-x:auto;">
+          <table class="g-con-table">
+            <thead>
+              <tr>
+                <th style="text-align:left">Row</th>
+                <th>Coeff of x₁</th>
+                <th></th>
+                <th>Coeff of x₂</th>
+                <th></th>
+                <th>Sign</th>
+                <th>RHS</th>
+              </tr>
+            </thead>
+            <tbody id="gConBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <button class="btn-solve" onclick="gSolve()">
+        ⚡ Solve Graphically
+      </button>
+    </div>
+
+    <!-- ── RESULTS ── -->
+    <div id="gResults" style="display:none; margin-top: 2rem;">
+      <div class="divider"></div>
+      <div id="gResultsInner"></div>
+    </div>
+
+  </main>
+
+  <footer>
+    <div class="footer-logo">TheOptimalist</div>
+    <div>Exact Fractions · Big-M &amp; Two-Phase</div>
+  </footer>
+
+
+  <script src="graphical.js"></script>
+
+</body>
+</html>
