@@ -6,12 +6,7 @@ const EPSILON = new Fraction(1, 1000000000);
 
 // ── Fraction helpers ──────────────────────────────────────────
 
-/**
- * BUG FIX 1: fmt() was broken for negative fractions.
- * Fraction.js stores the sign in f.s (-1 or 1), and f.n is always non-negative.
- * The old code did `f.n * (f.s < 0 ? -1 : 1)` which is correct for the numerator,
- * but then used the same pattern incorrectly. Rewritten cleanly using f.toFraction().
- */
+
 function fmt(f) {
   f = new Fraction(f);
   // f.s is the sign (-1 or 1), f.n is abs(numerator), f.d is denominator
@@ -43,13 +38,6 @@ function pivot(tableau, pivotRow, pivotCol) {
 
 // ── Pivot column (most negative) ──────────────────────────────
 
-/**
- * BUG FIX 2: The original choosePivotCol had a broken condition.
- * It checked `bestVal.sub(v).compare(EPSILON) > 0` which is equivalent to
- * `bestVal - v > EPSILON`, i.e., v < bestVal - EPSILON. But bestVal starts at 0,
- * so this never triggers for the first negative value found.
- * Correct logic: find the most negative coefficient (< -EPSILON) in the z-row.
- */
 function choosePivotCol(zRow) {
   let best = -1;
   let bestVal = frac(0).sub(EPSILON); // threshold: must be < -EPSILON
@@ -82,14 +70,7 @@ function choosePivotRow(tableau, col) {
 
 // ── Build Big-M tableau ───────────────────────────────────────
 
-/**
- * BUG FIX 3: basicVar selection for '>=' constraints was wrong.
- * For '>=' rows, the basic variable should be the ARTIFICIAL (not the surplus).
- * The old code used `slackMap[i].col` (the surplus) as default, then only
- * overrode it if `slackMap[i]?.type === 'surplus'` — but that check runs inside
- * the artCols loop only when ac.con === i, so the override logic was backwards.
- * Fixed: for surplus rows, always start basicVar = -1 so the artificial wins.
- */
+
 function buildBigMTableau(obj, constraints, signs, rhs, choice, numVars, numCons) {
   const direction = choice === 'max' ? frac(-1) : frac(1);
   const notes = [];
@@ -183,9 +164,7 @@ function buildBigMTableau(obj, constraints, signs, rhs, choice, numVars, numCons
 
 // ── Build Phase-1 tableau ──────────────────────────────────────
 
-/**
- * BUG FIX 4 (same as Fix 3): basicVar for surplus rows must be the artificial, not the surplus.
- */
+
 function buildPhase1Tableau(obj, constraints, signs, rhs, numVars, numCons) {
   const notes = [];
   const slackMap = {};
@@ -274,15 +253,7 @@ function buildPhase1Tableau(obj, constraints, signs, rhs, numVars, numCons) {
 
 // ── Build Phase-2 tableau ──────────────────────────────────────
 
-/**
- * BUG FIX 5: Phase-2 z-row canonical elimination was reading from newTab[0]
- * which had already been overwritten with the Phase-2 objective coefficients.
- * The elimination must use those fresh coefficients, but read the CONSTRAINT rows
- * (newTab[i+1]) — that part was correct. The real bug was that the loop read
- * `f = frac(newTab[0][bv])` AFTER newTab[0] was already modified by a previous
- * iteration, corrupting subsequent eliminations.
- * Fix: read ALL factors first into a list, THEN apply eliminations.
- */
+
 function buildPhase2Tableau(tab, basics, colNames, obj, choice, numVars) {
   const direction = choice === 'max' ? frac(-1) : frac(1);
   const artColIndices = new Set();
@@ -328,16 +299,7 @@ function buildPhase2Tableau(tab, basics, colNames, obj, choice, numVars) {
 
 // ── Core simplex iterations ────────────────────────────────────
 
-/**
- * BUG FIX 6: simplexIterations did not update `tableau` and `basics` after
- * the pivot step — the pivot result was computed but never assigned back.
- * The function's return value therefore had stale data after any pivot.
- * Fixed: assign `tableau = pivot(...)` and update `basics[pivotRow-1] = pivotCol`
- * before looping again (these were already present but the returned `tableau`
- * in the 'optimal' branch was the pre-pivot one from the last iteration).
- * Also: the step snapshot must be taken BEFORE the pivot, which was correct,
- * but the returned tableau/basics must reflect ALL pivots including the last one.
- */
+
 function simplexIterations(tableau, basics, colNames, artColIndices = new Set(), label = '') {
   const steps = [];
   let iter = 0;
@@ -408,12 +370,7 @@ function cloneTableau(t) {
 
 // ── Run Big-M ─────────────────────────────────────────────────
 
-/**
- * BUG FIX 7: runBigM was passing the already-mutated basics array from
- * buildBigMTableau directly into simplexIterations. Because JS arrays are
- * passed by reference, the artColIndices Set and the basics array were shared.
- * Fix: always pass cloned copies.
- */
+
 function runBigM(obj, constraints, signs, rhs, choice, numVars, numCons) {
   const built = buildBigMTableau(obj, constraints, signs, rhs, choice, numVars, numCons);
   const { colNames, artColIndices, notes } = built;
