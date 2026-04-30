@@ -873,7 +873,7 @@
         steps.push({
           type: 'pivot', iteration: iteration + 1, label: 'Big-M',
           entering: colNames[pivotCol], leaving: colNames[basis[pivotRow - 1]],
-          isArtLeaving, pivotVal: fmt(pivotVal),
+          isArtLeaving, pivotVal: fmt(pivotVal), pivotRow, pivotCol,
           tableau: snap.tab, basics: snap.bas, colNames: colNames.slice(), ratios
         });
 
@@ -929,9 +929,11 @@
           var snap = snapshotTableau(TAB, basis, colNames, nc, totalCols, RHS, -1, -1, null, true);
           steps.push({ type: 'optimal', iteration: iteration, label: 'Phase 1', message: 'Phase 1 complete.', tableau: snap.tab, basics: snap.bas, colNames: colNames.slice() });
 
-          // Check: if Phase 1 objective ≠ 0, infeasible
-          if (TAB[0][RHS].abs().gt(frac(1e-9))) {
-            steps.push({ type: 'infeasible', message: 'Phase 1 objective > 0: problem is infeasible.' });
+          // Check: if Phase 1 objective ≠ 0, infeasible.
+          // We maximise −Σaᵢ; at optimality TAB[0][RHS] = −(sum of artificials).
+          // If sum > 0 then TAB[0][RHS] < −ε → infeasible.
+          if (TAB[0][RHS].lt(frac(-1e-9))) {
+            steps.push({ type: 'infeasible', message: 'Phase 1 objective ≠ 0: no feasible solution exists.' });
             return { status: 'infeasible', steps, notes, solution: null };
           }
           break;
@@ -959,7 +961,7 @@
         steps.push({
           type: 'pivot', iteration: iteration + 1, label: 'Phase 1',
           entering: colNames[pivotCol], leaving: colNames[basis[pivotRow - 1]],
-          isArtLeaving, pivotVal: fmt(pivotVal),
+          isArtLeaving, pivotVal: fmt(pivotVal), pivotRow, pivotCol,
           tableau: snap.tab, basics: snap.bas, colNames: colNames.slice(), ratios
         });
 
@@ -967,19 +969,38 @@
         iteration++;
       }
 
+      // ── Handle degenerate artificials: pivot out any artificial still in
+      //    the basis with value 0. Choose any non-artificial column with a
+      //    non-zero entry in that row as the entering variable.
+      for (var r = 0; r < nc; r++) {
+        if (artSet.has(basis[r])) {
+          for (var c = 0; c < totalCols; c++) {
+            if (!artSet.has(c) && !TAB[r + 1][c].eq(frac(0))) {
+              pivot(TAB, basis, r + 1, c, nc, totalCols, RHS);
+              break;
+            }
+          }
+          // If no non-artificial column can enter, the row is redundant;
+          // artSet will still cause the column to be ignored in Phase 2.
+        }
+      }
+
       // ── Phase 2 ──
       return runPhase2(TAB, basis, obj, nv, nc, totalCols, RHS, artSet, colNames, notes, isMin, choice, steps);
     }
 
     function runPhase2(TAB, basis, obj, nv, nc, totalCols, RHS, artSet, colNames, notes, isMin, choice, steps) {
-      // Restore Phase 2 objective row
+      // ── Rebuild Z-row with original objective coefficients ──
+      // obj[] has already been sign-flipped for min inside solve(), so:
+      //   obj[c] =  c_j  (max problem, use as-is for reduced cost)
+      //   obj[c] = -c_j  (min problem, already in max-form)
+      // The Z-row in tableau form stores −(obj coeff) so entering test is "< 0".
       for (var c = 0; c <= totalCols; c++) TAB[0][c] = frac(0);
       for (var c = 0; c < nv; c++) TAB[0][c] = obj[c].neg();
 
-      // Zero out artificial columns in Z row (they're driven out)
-      for (var c of artSet) TAB[0][c] = frac(0);
-
-      // Eliminate basic variables from Z row
+      // ── Eliminate current basis variables from the new Z-row ──
+      // This enforces zero reduced cost for each basic variable.
+      // Process ALL basis rows, including any that may still hold an artificial.
       for (var r = 0; r < nc; r++) {
         var bCol = basis[r];
         var coeff = TAB[0][bCol];
@@ -989,6 +1010,9 @@
           }
         }
       }
+
+      // ── Force artificial columns to 0 in Z-row so they can never enter ──
+      for (var c of artSet) TAB[0][c] = frac(0);
 
       var iteration = 0;
       var MAX_ITER = 200;
@@ -1031,7 +1055,7 @@
         steps.push({
           type: 'pivot', iteration: iteration + 1, label: 'Phase 2',
           entering: colNames[pivotCol], leaving: colNames[basis[pivotRow - 1]],
-          isArtLeaving, pivotVal: fmt(pivotVal),
+          isArtLeaving, pivotVal: fmt(pivotVal), pivotRow, pivotCol,
           tableau: snap.tab, basics: snap.bas, colNames: colNames.slice(), ratios
         });
 
@@ -1653,9 +1677,14 @@
           const isPivotCell = !isOptimal && r === pivotRow && j === pivotCol;
           const isEnterCell = !isOptimal && !isZRow && j === pivotCol;
           let cls = '';
-          if (isPivotCell) cls = ' class="cell-pivot"';
-          else if (isEnterCell) cls = ' class="td-enter-col"';
-          html += `<td${cls}>${val}</td>`;
+          let inlineStyle = '';
+          if (isPivotCell) {
+            cls = ' class="cell-pivot"';
+            inlineStyle = ' style="background:rgba(184,146,42,0.35)!important;font-weight:700;color:#5a3500!important;outline:2px solid #b8922a;"';
+          } else if (isEnterCell) {
+            cls = ' class="td-enter-col"';
+          }
+          html += `<td${cls}${inlineStyle}>${val}</td>`;
         });
 
         if (showRatio) {
