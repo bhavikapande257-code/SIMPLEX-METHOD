@@ -273,12 +273,20 @@
     .tableau-table tr:hover td { background: rgba(237,232,220,0.6); }
 
     .th-enter { background: rgba(42,122,78,0.1) !important; color: var(--accent-enter) !important; }
+    .th-enter .col-arrow { display: inline-block; margin-left: 4px; font-size: 0.8rem; vertical-align: middle; }
     .td-enter-col { background: rgba(42,122,78,0.04); }
-    .cell-pivot { background: rgba(184,146,42,0.18) !important; font-weight: 700; color: #7a5a10 !important; }
+    .cell-pivot {
+      background: rgba(184,146,42,0.28) !important;
+      font-weight: 700;
+      color: #7a5a10 !important;
+      outline: 2px solid var(--gold);
+      outline-offset: -2px;
+    }
     .th-ratio { background: rgba(26,39,68,0.06) !important; color: var(--navy-mid) !important; }
     .td-ratio { color: var(--navy-mid); font-style: italic; }
     .row-z td { background: rgba(26,39,68,0.04); font-weight: 500; }
     .row-leaving td:first-child { background: rgba(184,50,50,0.06); }
+    .row-leaving td:first-child .row-arrow { display: inline-block; margin-left: 5px; font-size: 0.8rem; color: var(--accent-leave); vertical-align: middle; }
 
     .notes-list { list-style: none; padding: 0; }
     .notes-list li {
@@ -873,7 +881,7 @@
         steps.push({
           type: 'pivot', iteration: iteration + 1, label: 'Big-M',
           entering: colNames[pivotCol], leaving: colNames[basis[pivotRow - 1]],
-          isArtLeaving, pivotVal: fmt(pivotVal), pivotRow, pivotCol,
+          isArtLeaving, pivotVal: fmt(pivotVal),
           tableau: snap.tab, basics: snap.bas, colNames: colNames.slice(), ratios
         });
 
@@ -887,6 +895,7 @@
     }
 
     // ── Two-Phase method ────────────────────────────────────────
+    // Mirrors the Python build_phase1_tableau / build_phase2_tableau / run_twophase logic exactly.
 
     function solvetwophase(TAB, basis, obj, nv, nc, totalCols, RHS, artSet, artStart, artCount, slackStart, slackCount, colNames, notes, isMin, choice) {
       var steps = [];
@@ -896,15 +905,17 @@
         return runPhase2(TAB, basis, obj, nv, nc, totalCols, RHS, artSet, colNames, notes, isMin, choice, steps);
       }
 
-      // ── Phase 1: minimise sum of artificials ──
-      // Phase 1 Z row: 0 for original/slack vars, 1 for artificials
+      // ── Phase 1: minimise sum of artificials (w = a1 + a2 + …) ──
+      // Python sets z_row[art_col] = +1 (minimise w), then eliminates basics.
+      // We do the same: set w-row to +1 for each artificial, 0 elsewhere.
       for (var c = 0; c <= totalCols; c++) TAB[0][c] = frac(0);
-      for (var c = artStart; c < artStart + artCount; c++) TAB[0][c] = frac(-1); // we maximise −(sum art)
+      for (var c = artStart; c < artStart + artCount; c++) TAB[0][c] = frac(1);
 
-      // Eliminate artificials from Z row
+      // Canonical form: eliminate basic artificials from w-row
+      // (same as Python: for each art col basic in a row, subtract factor*row from w-row)
       for (var r = 0; r < nc; r++) {
         if (artSet.has(basis[r])) {
-          var coeff = TAB[0][basis[r]];
+          var coeff = TAB[0][basis[r]]; // = 1
           for (var c = 0; c <= totalCols; c++) {
             TAB[0][c] = TAB[0][c].sub(coeff.mul(TAB[r + 1][c]));
           }
@@ -914,6 +925,7 @@
       var iteration = 0;
       var MAX_ITER = 200;
 
+      // Phase 1 simplex: minimise w → look for most NEGATIVE reduced cost in w-row
       while (iteration < MAX_ITER) {
         var pivotCol = -1;
         var mostNeg = frac(0);
@@ -925,15 +937,17 @@
         }
 
         if (pivotCol === -1) {
-          // Phase 1 optimal
+          // w-row optimal — check if w = 0 (feasible) or w > 0 (infeasible)
           var snap = snapshotTableau(TAB, basis, colNames, nc, totalCols, RHS, -1, -1, null, true);
           steps.push({ type: 'optimal', iteration: iteration, label: 'Phase 1', message: 'Phase 1 complete.', tableau: snap.tab, basics: snap.bas, colNames: colNames.slice() });
 
-          // Check: if Phase 1 objective ≠ 0, infeasible.
-          // We maximise −Σaᵢ; at optimality TAB[0][RHS] = −(sum of artificials).
-          // If sum > 0 then TAB[0][RHS] < −ε → infeasible.
-          if (TAB[0][RHS].lt(frac(-1e-9))) {
-            steps.push({ type: 'infeasible', message: 'Phase 1 objective ≠ 0: no feasible solution exists.' });
+          // Python: w_val = tableau[0][-1]; if abs(w_val) > EPSILON → infeasible
+          // After minimisation the w-row RHS holds −w* (negated because we subtracted rows).
+          // w* = 0 means feasible. w* ≠ 0 means infeasible.
+          // With exact fractions: TAB[0][RHS] should be exactly 0 when feasible.
+          var wVal = TAB[0][RHS];
+          if (!wVal.eq(frac(0))) {
+            steps.push({ type: 'infeasible', message: 'Phase 1 objective w ≠ 0: problem is infeasible.' });
             return { status: 'infeasible', steps, notes, solution: null };
           }
           break;
@@ -951,7 +965,8 @@
         }
 
         if (pivotRow === -1) {
-          steps.push({ type: 'unbounded', message: 'Unbounded in Phase 1 (should not happen).' });
+          // Genuinely unbounded in Phase 1 — treat as infeasible (shouldn't happen for valid LP)
+          steps.push({ type: 'infeasible', message: 'Phase 1 could not find a pivot row.' });
           return { status: 'infeasible', steps, notes, solution: null };
         }
 
@@ -961,7 +976,7 @@
         steps.push({
           type: 'pivot', iteration: iteration + 1, label: 'Phase 1',
           entering: colNames[pivotCol], leaving: colNames[basis[pivotRow - 1]],
-          isArtLeaving, pivotVal: fmt(pivotVal), pivotRow, pivotCol,
+          isArtLeaving, pivotVal: fmt(pivotVal),
           tableau: snap.tab, basics: snap.bas, colNames: colNames.slice(), ratios
         });
 
@@ -969,56 +984,78 @@
         iteration++;
       }
 
-      // ── Handle degenerate artificials: pivot out any artificial still in
-      //    the basis with value 0. Choose any non-artificial column with a
-      //    non-zero entry in that row as the entering variable.
+      // ── Phase 2: drop artificial columns, rebuild Z-row from original objective ──
+      // Mirrors Python build_phase2_tableau: identify art col indices, keep only non-art cols,
+      // remap basis, build fresh z-row, eliminate basics from z-row.
+
+      // 1. Identify which column indices to keep (all non-artificial cols)
+      var keepCols = [];
+      for (var c = 0; c <= totalCols; c++) {
+        if (!artSet.has(c)) keepCols.push(c);
+      }
+      // keepCols now = [0..artStart-1, artStart+artCount..totalCols] = decision+slack+RHS cols
+
+      // 2. Build reduced tableau with only kept columns
+      var newTotalCols = keepCols.length - 1; // exclude RHS (last in keepCols)
+      var newRHS = newTotalCols;              // index of RHS in new tableau
+      var newColNames = keepCols.map(function(c) { return colNames[c]; });
+
+      // Build old→new column index mapping
+      var oldToNew = {};
+      for (var ki = 0; ki < keepCols.length; ki++) {
+        oldToNew[keepCols[ki]] = ki;
+      }
+
+      // Slice each tableau row to kept columns only
+      var newTAB = [];
+      for (var r = 0; r <= nc; r++) {
+        var newRow = keepCols.map(function(c) { return TAB[r][c]; });
+        newTAB.push(newRow);
+      }
+
+      // Remap basis to new column indices
+      var newBasis = basis.map(function(b) { return oldToNew[b]; });
+
+      // 3. Build Phase-2 z-row: direction * obj coefficients (Python: direction = -1 for max, +1 for min)
+      for (var c = 0; c <= newTotalCols; c++) newTAB[0][c] = frac(0);
+      for (var c = 0; c < nv; c++) {
+        // isMin: direction=+1 so z_row[c] = +obj[c]; for max: direction=-1 so z_row[c] = -obj[c]
+        // But obj was already negated for isMin in solve(), so:
+        //   isMin  → obj[c] = negated coeff → direction*obj[c] = +negated = negated (wrong)
+        // We must use the RAW objective. Since obj[c] was negated when isMin=true,
+        // we un-negate for min: direction=+1 means z_row = obj[c] (already negated = actually +original)
+        // For max: z_row = -obj[c] (obj[c] is original, negated = standard max form)
+        // Python direction = -1 for max, +1 for min:  z_row[i] = direction * c
+        // Here obj[c] for max = original coeff, for min = negated original.
+        // So: for max → z_row = (-1)*obj[c] = -obj[c] ✓ (standard: put -c in z-row for max)
+        //     for min → z_row = (+1)*obj[c] = obj[c] = -original (because obj was negated)
+        //             → same as -original which is correct for min treated as max of -z
+        newTAB[0][c] = isMin ? obj[c] : obj[c].neg();
+      }
+
+      // 4. Eliminate basic variables from z-row (canonical form) — Python: for each bv, subtract factor*row
       for (var r = 0; r < nc; r++) {
-        if (artSet.has(basis[r])) {
-          for (var c = 0; c < totalCols; c++) {
-            if (!artSet.has(c) && !TAB[r + 1][c].eq(frac(0))) {
-              pivot(TAB, basis, r + 1, c, nc, totalCols, RHS);
-              break;
-            }
+        var bv = newBasis[r];
+        var f = newTAB[0][bv];
+        if (!f.eq(frac(0))) {
+          for (var c = 0; c <= newTotalCols; c++) {
+            newTAB[0][c] = newTAB[0][c].sub(f.mul(newTAB[r + 1][c]));
           }
-          // If no non-artificial column can enter, the row is redundant;
-          // artSet will still cause the column to be ignored in Phase 2.
         }
       }
 
-      // ── Phase 2 ──
-      return runPhase2(TAB, basis, obj, nv, nc, totalCols, RHS, artSet, colNames, notes, isMin, choice, steps);
+      return runPhase2(newTAB, newBasis, obj, nv, nc, newTotalCols, newRHS, new Set(), newColNames, notes, isMin, choice, steps);
     }
 
     function runPhase2(TAB, basis, obj, nv, nc, totalCols, RHS, artSet, colNames, notes, isMin, choice, steps) {
-      // ── Rebuild Z-row with original objective coefficients ──
-      // obj[] has already been sign-flipped for min inside solve(), so:
-      //   obj[c] =  c_j  (max problem, use as-is for reduced cost)
-      //   obj[c] = -c_j  (min problem, already in max-form)
-      // The Z-row in tableau form stores −(obj coeff) so entering test is "< 0".
-      for (var c = 0; c <= totalCols; c++) TAB[0][c] = frac(0);
-      for (var c = 0; c < nv; c++) TAB[0][c] = obj[c].neg();
-
-      // ── Eliminate current basis variables from the new Z-row ──
-      // This enforces zero reduced cost for each basic variable.
-      // Process ALL basis rows, including any that may still hold an artificial.
-      for (var r = 0; r < nc; r++) {
-        var bCol = basis[r];
-        var coeff = TAB[0][bCol];
-        if (!coeff.eq(frac(0))) {
-          for (var c = 0; c <= totalCols; c++) {
-            TAB[0][c] = TAB[0][c].sub(coeff.mul(TAB[r + 1][c]));
-          }
-        }
-      }
-
-      // ── Force artificial columns to 0 in Z-row so they can never enter ──
-      for (var c of artSet) TAB[0][c] = frac(0);
+      // At this point the tableau is already in canonical form with z-row set.
+      // artSet is empty (artificial columns were dropped before calling this).
 
       var iteration = 0;
       var MAX_ITER = 200;
 
       while (iteration < MAX_ITER) {
-        // Find entering: most negative in Z row (skip artificial cols)
+        // Find entering: most negative in Z row (skip artificial cols — artSet is empty here)
         var pivotCol = -1, mostNeg = frac(0);
         for (var c = 0; c < totalCols; c++) {
           if (!artSet.has(c) && TAB[0][c].lt(mostNeg)) {
@@ -1055,7 +1092,7 @@
         steps.push({
           type: 'pivot', iteration: iteration + 1, label: 'Phase 2',
           entering: colNames[pivotCol], leaving: colNames[basis[pivotRow - 1]],
-          isArtLeaving, pivotVal: fmt(pivotVal), pivotRow, pivotCol,
+          isArtLeaving, pivotVal: fmt(pivotVal),
           tableau: snap.tab, basics: snap.bas, colNames: colNames.slice(), ratios
         });
 
@@ -1222,6 +1259,121 @@
       window._autoSimplexMode = false;
       hideError();
       document.getElementById('formArea').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+      attachMatrixKeyNav(numVars, numCons);
+    }
+
+    /**
+     * Attaches Arrow-key + Enter keyboard navigation to all matrix input boxes.
+     *
+     * Grid layout (rows × cols):
+     *   Row 0          : obj_1 … obj_numVars                      (objective row)
+     *   Rows 1..numCons: con_r_1 … con_r_numVars | rhs_r          (constraint rows)
+     *
+     * The RHS column is treated as an extra column at index numVars.
+     * ArrowRight from RHS wraps to the first cell of the next row.
+     * ArrowLeft  from first cell wraps to RHS of the previous row.
+     * Enter       moves down (same as ArrowDown).
+     */
+    function attachMatrixKeyNav(nVars, nCons) {
+      // Build a 2-D array of input elements: grid[row][col]
+      // row 0 = objective; rows 1..nCons = constraints (+rhs)
+      const grid = [];
+
+      // Objective row (no RHS cell — only nVars inputs)
+      const objRow = [];
+      for (let i = 1; i <= nVars; i++) {
+        objRow.push(document.getElementById(`obj_${i}`));
+      }
+      grid.push(objRow);
+
+      // Constraint rows (nVars coefficient inputs + 1 RHS input)
+      for (let r = 1; r <= nCons; r++) {
+        const conRow = [];
+        for (let i = 1; i <= nVars; i++) {
+          conRow.push(document.getElementById(`con_${r}_${i}`));
+        }
+        conRow.push(document.getElementById(`rhs_${r}`));
+        grid.push(conRow);
+      }
+
+      // Focus helper — safely focuses a cell if it exists
+      function focusCell(row, col) {
+        const targetRow = grid[row];
+        if (!targetRow) return false;
+        const cell = targetRow[col];
+        if (!cell) return false;
+        cell.focus();
+        cell.select();
+        return true;
+      }
+
+      // Determine position of a given input in the grid
+      function findCell(el) {
+        for (let r = 0; r < grid.length; r++) {
+          for (let c = 0; c < grid[r].length; c++) {
+            if (grid[r][c] === el) return { r, c };
+          }
+        }
+        return null;
+      }
+
+      // Attach keydown listener to every input in the grid
+      grid.forEach((row, r) => {
+        row.forEach((input, c) => {
+          if (!input) return;
+          input.addEventListener('keydown', function (e) {
+            const key = e.key;
+            if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter'].includes(key)) return;
+
+            const pos = findCell(e.target);
+            if (!pos) return;
+
+            let { r: cr, c: cc } = pos;
+            const rowLen = grid[cr].length;
+            const totalRows = grid.length;
+
+            let targetR = cr, targetC = cc;
+            let handled = false;
+
+            if (key === 'ArrowRight') {
+              if (cc + 1 < rowLen) {
+                targetC = cc + 1;
+              } else if (cr + 1 < totalRows) {
+                targetR = cr + 1;
+                targetC = 0;
+              }
+              handled = true;
+            } else if (key === 'ArrowLeft') {
+              if (cc - 1 >= 0) {
+                targetC = cc - 1;
+              } else if (cr - 1 >= 0) {
+                targetR = cr - 1;
+                targetC = grid[cr - 1].length - 1;
+              }
+              handled = true;
+            } else if (key === 'ArrowDown' || key === 'Enter') {
+              if (cr + 1 < totalRows) {
+                targetR = cr + 1;
+                // Stay in same column if it exists in next row, else last col
+                targetC = cc < grid[cr + 1].length ? cc : grid[cr + 1].length - 1;
+              }
+              handled = true;
+            } else if (key === 'ArrowUp') {
+              if (cr - 1 >= 0) {
+                targetR = cr - 1;
+                targetC = cc < grid[cr - 1].length ? cc : grid[cr - 1].length - 1;
+              }
+              handled = true;
+            }
+
+            if (handled && (targetR !== cr || targetC !== cc)) {
+              e.preventDefault();
+              focusCell(targetR, targetC);
+            }
+          });
+        });
+      });
     }
 
     function confirmConstraints() {
@@ -1658,7 +1810,7 @@
       let html = `<div class="tableau-wrap"><table class="tableau-table"><thead><tr><th>Basis</th>`;
       colNames.forEach((n, j) => {
         const isEnterCol = !isOptimal && j === pivotCol;
-        html += `<th${isEnterCol ? ' class="th-enter"' : ''}>${n}</th>`;
+        html += `<th${isEnterCol ? ' class="th-enter"' : ''}>${n}${isEnterCol ? '<span class="col-arrow">↓</span>' : ''}</th>`;
       });
       if (showRatio) html += `<th class="th-ratio">Ratio</th>`;
       html += `</tr></thead><tbody>`;
@@ -1671,20 +1823,15 @@
         const basisLabel = isZRow ? 'Z'
           : (basics && basics[r - 1] !== undefined && basics[r - 1] < colNames.length
             ? colNames[basics[r - 1]] : '?');
-        html += `<td>${basisLabel}</td>`;
+        html += `<td>${basisLabel}${isLeaving ? '<span class="row-arrow">→</span>' : ''}</td>`;
 
         tableau[r].forEach((val, j) => {
           const isPivotCell = !isOptimal && r === pivotRow && j === pivotCol;
           const isEnterCell = !isOptimal && !isZRow && j === pivotCol;
           let cls = '';
-          let inlineStyle = '';
-          if (isPivotCell) {
-            cls = ' class="cell-pivot"';
-            inlineStyle = ' style="background:rgba(184,146,42,0.35)!important;font-weight:700;color:#5a3500!important;outline:2px solid #b8922a;"';
-          } else if (isEnterCell) {
-            cls = ' class="td-enter-col"';
-          }
-          html += `<td${cls}${inlineStyle}>${val}</td>`;
+          if (isPivotCell) cls = ' class="cell-pivot"';
+          else if (isEnterCell) cls = ' class="td-enter-col"';
+          html += `<td${cls}>${val}</td>`;
         });
 
         if (showRatio) {
