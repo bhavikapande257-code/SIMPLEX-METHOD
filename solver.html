@@ -527,16 +527,6 @@
     </div>
   </main>
 
-  <section class="team-section" id="team">
-    <div class="team-inner">
-      <div class="team-header">
-        <div class="team-label">The Builders</div>
-        <h2 class="team-title">Meet the Team</h2>
-      </div>
-      <div class="team-grid" id="teamGrid"></div>
-    </div>
-  </section>
-
   <footer>
     <div class="footer-logo">TheOptimalist</div>
     <div>Exact Fractions · Big-M &amp; Two-Phase</div>
@@ -1174,26 +1164,6 @@
     // ============================================================
     //  UI LAYER
     // ============================================================
-
-    const TEAM = [
-      { name: "Team Member 1", role: "Algorithm Design" },
-      { name: "Team Member 2", role: "Frontend & UI" },
-      { name: "Team Member 3", role: "Math & Validation" },
-      { name: "Team Member 4", role: "Testing & Docs" },
-    ];
-
-    (function buildTeam() {
-      const grid = document.getElementById('teamGrid');
-      TEAM.forEach(m => {
-        const initials = m.name.split(' ').map(w => w[0]).join('').slice(0, 2);
-        grid.innerHTML += `
-        <div class="team-card">
-          <div class="team-avatar">${initials}</div>
-          <div class="team-name">${m.name}</div>
-          <div class="team-role">${m.role}</div>
-        </div>`;
-      });
-    })();
 
     let numVars = 2, numCons = 2;
 
