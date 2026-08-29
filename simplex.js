@@ -370,7 +370,7 @@ function simplexIterations(tableau, basics, colNames, artColIndices = new Set(),
 
     const pivotRow = choosePivotRow(tableau, pivotCol);
     if (pivotRow === -1) {
-      steps.push({ type: 'unbounded', label, iteration: iter, message: 'Problem is UNBOUNDED.' });
+      steps.push({ type: 'unbounded', label, iteration: iter, entering: colNames[pivotCol], pivotCol, message: 'Problem is UNBOUNDED.' });
       return { tableau, basics, status: 'unbounded', steps };
     }
 
@@ -507,4 +507,25 @@ function solve(params) {
   }
 
   return { ...result, solution };
+}
+
+// ── Post-result classification helper ─────────────────────────
+// Kept separate from the pivoting engine so existing solver logic remains intact.
+function classifySimplexResult(result) {
+  if (!result) return 'unknown';
+  if (result.status === 'unbounded') return 'unbounded';
+  if (result.status === 'infeasible') return 'infeasible';
+  if (result.status === 'optimal') {
+    const finalStep = [...(result.steps || [])].reverse().find(s => s.type === 'optimal' && s.label !== 'Phase 1') ||
+      [...(result.steps || [])].reverse().find(s => s.type === 'optimal');
+    if (!finalStep || !finalStep.tableau || !finalStep.basics) return 'optimal';
+    const basicSet = new Set(finalStep.basics);
+    for (let j = 0; j < finalStep.colNames.length - 1; j++) {
+      if (!basicSet.has(j) && frac(finalStep.tableau[0][j]).eq(frac(0))) return 'multiple-optima';
+    }
+    const rhs = finalStep.tableau[0].length - 1;
+    if (finalStep.basics.some((_, r) => frac(finalStep.tableau[r + 1][rhs]).eq(frac(0)))) return 'degenerate-optimum';
+    return 'unique-optimum';
+  }
+  return 'unknown';
 }
