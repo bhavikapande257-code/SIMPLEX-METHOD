@@ -363,6 +363,21 @@ function gConstraintLabel(c){
   return `${gFmt(c.a1)}x₁ ${c.a2<0?'−':'+'} ${gFmt(Math.abs(c.a2))}x₂ ${sign} ${gFmt(c.rhs)}`;
 }
 
+// Places a text label near a target point, nudging it up/down when it would
+// overlap a previously-placed label on the same canvas.
+function gPlaceLabel(ctx,text,x,y,placed,align){
+  align=align||'left';
+  const w=ctx.measureText(text).width,h=12;
+  const boxFor=yy=>({x:align==='right'?x-w:(align==='center'?x-w/2:x),y:yy-h,w,h:h+4});
+  const overlaps=(a,b)=>!(a.x+a.w<b.x||b.x+b.w<a.x||a.y+a.h<b.y||b.y+b.h<a.y);
+  const offsets=[0,13,-13,26,-26,39,-39,52,-52];
+  let box=boxFor(y),chosen=y;
+  for(const off of offsets){const cand=boxFor(y+off);if(!placed.some(p=>overlaps(cand,p))){box=cand;chosen=y+off;break;}}
+  placed.push(box);
+  ctx.textAlign=align;
+  ctx.fillText(text,x,chosen);
+}
+
 function gDrawArrow(ctx,x1,y1,x2,y2,size=7){
   const a=Math.atan2(y2-y1,x2-x1);
   ctx.beginPath();ctx.moveTo(x2,y2);
@@ -416,6 +431,9 @@ function drawGraph() {
 
   gDrawHatchedRegion(ctx,convexHull(feasibleRegion),X,Y);
 
+  // Tracks label boxes already drawn on this canvas so later labels avoid them.
+  const placedLabels=[];
+
   const lineColours=['#1657c8','#d83a2e','#2b8a3e','#7b4ab5','#d28b20','#168a8a'];
   constraints.forEach((c,i)=>{
     const pts=gLineSegment(c.a1,c.a2,c.rhs,maxX,maxY);if(pts.length!==2)return;
@@ -423,8 +441,8 @@ function drawGraph() {
     ctx.beginPath();ctx.moveTo(X(pts[0].x),Y(pts[0].y));ctx.lineTo(X(pts[1].x),Y(pts[1].y));ctx.stroke();
     const t=Math.min(.74,Math.max(.27,.40+i*.13));
     const lx=pts[0].x+(pts[1].x-pts[0].x)*t,ly=pts[0].y+(pts[1].y-pts[0].y)*t;
-    ctx.fillStyle=lineColours[i%lineColours.length];ctx.font='bold 10px Lato,sans-serif';ctx.textAlign='left';
-    ctx.fillText(gConstraintLabel(c),Math.min(W-170,X(lx)+5),Math.max(16,Y(ly)-5));
+    ctx.fillStyle=lineColours[i%lineColours.length];ctx.font='bold 10px Lato,sans-serif';
+    gPlaceLabel(ctx,gConstraintLabel(c),Math.min(W-170,X(lx)+5),Math.max(16,Y(ly)-5),placedLabels,'left');
   });
 
   if(solution&&(Math.abs(objCoeffs[0])>1e-10||Math.abs(objCoeffs[1])>1e-10)){
@@ -432,7 +450,7 @@ function drawGraph() {
     if(pts.length===2){
       ctx.strokeStyle='#7b3fb3';ctx.lineWidth=2;ctx.setLineDash([8,6]);ctx.beginPath();ctx.moveTo(X(pts[0].x),Y(pts[0].y));ctx.lineTo(X(pts[1].x),Y(pts[1].y));ctx.stroke();ctx.setLineDash([]);
       const q=pts[0].x>pts[1].x?pts[0]:pts[1];ctx.fillStyle='#7b3fb3';ctx.font='bold 10px Lato,sans-serif';
-      ctx.fillText(`${objective==='max'?'Max':'Min'} Z = ${gFmt(objCoeffs[0])}x₁ ${objCoeffs[1]<0?'−':'+'} ${gFmt(Math.abs(objCoeffs[1]))}x₂ = ${gFmt(z)}`,Math.min(W-230,X(q.x)-95),Math.max(18,Y(q.y)-8));
+      gPlaceLabel(ctx,`${objective==='max'?'Max':'Min'} Z = ${gFmt(objCoeffs[0])}x₁ ${objCoeffs[1]<0?'−':'+'} ${gFmt(Math.abs(objCoeffs[1]))}x₂ = ${gFmt(z)}`,Math.min(W-230,X(q.x)-95),Math.max(18,Y(q.y)-8),placedLabels,'left');
     }
   }
 
@@ -448,14 +466,15 @@ function drawGraph() {
   feasibleRegion.forEach(v=>{
     const isOpt=solution&&Math.abs(v.x-solution.point.x)<1e-7&&Math.abs(v.y-solution.point.y)<1e-7;
     ctx.fillStyle='#111';ctx.beginPath();ctx.arc(X(v.x),Y(v.y),isOpt?3.5:3,0,2*Math.PI);ctx.fill();
-    ctx.fillStyle=isOpt?'#d32620':'#222';ctx.font=isOpt?'bold 11px Lato,sans-serif':'10px Lato,sans-serif';ctx.textAlign='left';
-    const dx=X(v.x)>W-105?-75:7;ctx.fillText('('+gFmt(v.x)+', '+gFmt(v.y)+')',X(v.x)+dx,Math.max(15,Y(v.y)-7));
+    ctx.fillStyle=isOpt?'#d32620':'#222';ctx.font=isOpt?'bold 11px Lato,sans-serif':'10px Lato,sans-serif';
+    const dx=X(v.x)>W-105?-75:7;
+    gPlaceLabel(ctx,'('+gFmt(v.x)+', '+gFmt(v.y)+')',X(v.x)+dx,Math.max(15,Y(v.y)-7),placedLabels,'left');
   });
 
   if(solution){
     const px=solution.point.x,py=solution.point.y;ctx.fillStyle='#e22f25';ctx.beginPath();ctx.arc(X(px),Y(py),8,0,2*Math.PI);ctx.fill();
-    ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();ctx.fillStyle='#d32620';ctx.font='bold 11px Lato,sans-serif';ctx.textAlign='left';
-    ctx.fillText('Optimal Point ('+gFmt(px)+', '+gFmt(py)+')',Math.min(W-165,X(px)+10),Math.max(16,Y(py)-10));
+    ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();ctx.fillStyle='#d32620';ctx.font='bold 11px Lato,sans-serif';
+    gPlaceLabel(ctx,'Optimal Point ('+gFmt(px)+', '+gFmt(py)+')',Math.min(W-165,X(px)+10),Math.max(16,Y(py)-10),placedLabels,'left');
   }
 
   const legendX=W-190,legendY=48;ctx.fillStyle='rgba(255,255,255,.94)';ctx.strokeStyle='rgba(26,39,68,.22)';ctx.lineWidth=1;ctx.fillRect(legendX,legendY,170,58);ctx.strokeRect(legendX,legendY,170,58);
