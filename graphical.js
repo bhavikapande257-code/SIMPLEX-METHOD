@@ -348,214 +348,42 @@ function renderGResults() {
 }
 
 // ── Canvas Drawing ───────────────────────────────────────────
+function gLineSegment(a,b,rhs,maxX,maxY){
+  const pts=[];
+  if(Math.abs(b)>1e-10){const y0=rhs/b,yX=(rhs-a*maxX)/b;if(y0>=0&&y0<=maxY)pts.push({x:0,y:y0});if(yX>=0&&yX<=maxY)pts.push({x:maxX,y:yX});}
+  if(Math.abs(a)>1e-10){const x0=rhs/a,xY=(rhs-b*maxY)/a;if(x0>=0&&x0<=maxX)pts.push({x:x0,y:0});if(xY>=0&&xY<=maxX)pts.push({x:xY,y:maxY});}
+  const u=[];pts.forEach(q=>{if(!u.some(p=>Math.abs(p.x-q.x)<1e-8&&Math.abs(p.y-q.y)<1e-8))u.push(q);});
+  if(u.length<=2)return u;let best=[u[0],u[1]],d=-1;for(let i=0;i<u.length;i++)for(let j=i+1;j<u.length;j++){const dd=(u[i].x-u[j].x)**2+(u[i].y-u[j].y)**2;if(dd>d){d=dd;best=[u[i],u[j]];}}return best;
+}
+function gConstraintLabel(c,i){const sign=c.sign==='leq'?'≤':c.sign==='geq'?'≥':'=';return `C${i+1}: ${c.a1}x₁ ${c.a2<0?'−':'+'} ${Math.abs(c.a2)}x₂ ${sign} ${c.rhs}`;}
+function gDrawArrow(ctx,x1,y1,x2,y2,size=7){const a=Math.atan2(y2-y1,x2-x1);ctx.beginPath();ctx.moveTo(x2,y2);ctx.lineTo(x2-size*Math.cos(a-Math.PI/6),y2-size*Math.sin(a-Math.PI/6));ctx.lineTo(x2-size*Math.cos(a+Math.PI/6),y2-size*Math.sin(a+Math.PI/6));ctx.closePath();ctx.fill();}
+
 function drawGraph() {
-  const canvas = gEl('gCanvas');
-  if (!canvas) return;
+  const canvas=gEl('gCanvas');if(!canvas)return;
+  const W=Math.min(canvas.parentElement.clientWidth-4,680),H=W,dpr=window.devicePixelRatio||1;
+  canvas.width=W*dpr;canvas.height=H*dpr;canvas.style.width=W+'px';canvas.style.height=H+'px';
+  const ctx=canvas.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);
+  const {constraints,feasibleRegion,solution,objCoeffs,objective}=gState;
+  const all=[...feasibleRegion,{x:0,y:0}];constraints.forEach(c=>{if(Math.abs(c.a1)>1e-10)all.push({x:c.rhs/c.a1,y:0});if(Math.abs(c.a2)>1e-10)all.push({x:0,y:c.rhs/c.a2});});
+  const finite=all.filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)&&p.x>=-1e-8&&p.y>=-1e-8);
+  let maxX=Math.max(5,...finite.map(p=>p.x)),maxY=Math.max(5,...finite.map(p=>p.y));maxX*=1.28;maxY*=1.28;
+  const pad={l:66,r:28,t:38,b:58},pw=W-pad.l-pad.r,ph=H-pad.t-pad.b,X=x=>pad.l+(x/maxX)*pw,Y=y=>pad.t+ph-(y/maxY)*ph;
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='rgba(26,39,68,0.07)';ctx.lineWidth=1;for(let i=0;i<=10;i++){const gx=X(i*maxX/10),gy=Y(i*maxY/10);ctx.beginPath();ctx.moveTo(gx,pad.t);ctx.lineTo(gx,pad.t+ph);ctx.stroke();ctx.beginPath();ctx.moveTo(pad.l,gy);ctx.lineTo(pad.l+pw,gy);ctx.stroke();}
 
-  // Retina sizing
-  const W = Math.min(canvas.parentElement.clientWidth - 4, 640);
-  const H = W;
-  canvas.width  = W * window.devicePixelRatio;
-  canvas.height = H * window.devicePixelRatio;
-  canvas.style.width  = W + 'px';
-  canvas.style.height = H + 'px';
+  if(feasibleRegion.length>=3){const hull=convexHull(feasibleRegion);ctx.beginPath();hull.forEach((p,i)=>i?ctx.lineTo(X(p.x),Y(p.y)):ctx.moveTo(X(p.x),Y(p.y)));ctx.closePath();ctx.fillStyle='rgba(42,122,78,0.22)';ctx.fill();ctx.strokeStyle='rgba(42,122,78,0.55)';ctx.lineWidth=1.5;ctx.stroke();}
 
-  const ctx = canvas.getContext('2d');
-  ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+  constraints.forEach((c,i)=>{const pts=gLineSegment(c.a1,c.a2,c.rhs,maxX,maxY);if(pts.length!==2)return;ctx.strokeStyle='#1a2744';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(X(pts[0].x),Y(pts[0].y));ctx.lineTo(X(pts[1].x),Y(pts[1].y));ctx.stroke();const m={x:(pts[0].x+pts[1].x)/2,y:(pts[0].y+pts[1].y)/2};ctx.fillStyle='#1a2744';ctx.font='bold 10px Lato,sans-serif';ctx.fillText(gConstraintLabel(c,i),Math.min(W-175,X(m.x)+6),Math.max(16,Y(m.y)-6));});
 
-  const { constraints, feasibleRegion, solution, objCoeffs, objective } = gState;
-
-  // Determine axis bounds
-  const allPts = [...feasibleRegion];
-  // Also include intercepts for bounds
-  for (const c of constraints) {
-    if (Math.abs(c.a1) > 1e-10) allPts.push({ x: c.rhs / c.a1, y: 0 });
-    if (Math.abs(c.a2) > 1e-10) allPts.push({ x: 0, y: c.rhs / c.a2 });
-  }
-  allPts.push({ x: 0, y: 0 });
-
-  let maxX = Math.max(...allPts.map(p => p.x), 5);
-  let maxY = Math.max(...allPts.map(p => p.y), 5);
-  maxX *= 1.25; maxY *= 1.25;
-
-  // If OBJ line visible: also clamp direction along objective
-  const pad = { top: 40, right: 40, bottom: 55, left: 55 };
-  const plotW = W - pad.left - pad.right;
-  const plotH = H - pad.top - pad.bottom;
-
-  const toCanvasX = x => pad.left + (x / maxX) * plotW;
-  const toCanvasY = y => pad.top + plotH - (y / maxY) * plotH;
-
-  // Background
-  ctx.fillStyle = '#fff';
-  ctx.fillRect(0, 0, W, H);
-
-  // Grid
-  ctx.strokeStyle = 'rgba(26,39,68,0.05)';
-  ctx.lineWidth = 1;
-  const gridCount = 8;
-  for (let i = 0; i <= gridCount; i++) {
-    const gx = toCanvasX(i * maxX / gridCount);
-    const gy = toCanvasY(i * maxY / gridCount);
-    ctx.beginPath(); ctx.moveTo(gx, pad.top); ctx.lineTo(gx, pad.top + plotH); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(pad.left, gy); ctx.lineTo(pad.left + plotW, gy); ctx.stroke();
+  if(solution&&objCoeffs.length>=2&&(Math.abs(objCoeffs[0])>1e-10||Math.abs(objCoeffs[1])>1e-10)){
+    const z=solution.value,pts=gLineSegment(objCoeffs[0],objCoeffs[1],z,maxX,maxY);if(pts.length===2){ctx.strokeStyle='#b83232';ctx.lineWidth=2.2;ctx.setLineDash([9,6]);ctx.beginPath();ctx.moveTo(X(pts[0].x),Y(pts[0].y));ctx.lineTo(X(pts[1].x),Y(pts[1].y));ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='#b83232';ctx.font='bold 11px Lato,sans-serif';ctx.fillText(`${objective==='max'?'Max':'Min'} Z = ${objCoeffs[0]}x₁ ${objCoeffs[1]<0?'−':'+'} ${Math.abs(objCoeffs[1])}x₂`,Math.min(W-190,X(pts[1].x)-90),Math.max(18,Y(pts[1].y)-8));}
   }
 
-  // Feasible region fill
-  if (feasibleRegion.length >= 3) {
-    const hull = convexHull(feasibleRegion);
-    ctx.beginPath();
-    ctx.moveTo(toCanvasX(hull[0].x), toCanvasY(hull[0].y));
-    for (let i = 1; i < hull.length; i++) ctx.lineTo(toCanvasX(hull[i].x), toCanvasY(hull[i].y));
-    ctx.closePath();
-    ctx.fillStyle = 'rgba(42,122,78,0.10)';
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(42,122,78,0.35)';
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([4, 3]);
-    ctx.stroke();
-    ctx.setLineDash([]);
-  } else if (feasibleRegion.length === 2) {
-    // Line segment
-    ctx.beginPath();
-    ctx.moveTo(toCanvasX(feasibleRegion[0].x), toCanvasY(feasibleRegion[0].y));
-    ctx.lineTo(toCanvasX(feasibleRegion[1].x), toCanvasY(feasibleRegion[1].y));
-    ctx.strokeStyle = 'rgba(42,122,78,0.5)';
-    ctx.lineWidth = 3;
-    ctx.stroke();
-  }
+  ctx.strokeStyle='#1a2744';ctx.fillStyle='#1a2744';ctx.lineWidth=1.8;ctx.beginPath();ctx.moveTo(X(0),Y(0));ctx.lineTo(X(0),pad.t+4);ctx.stroke();gDrawArrow(ctx,X(0),pad.t+12,X(0),pad.t+2);ctx.beginPath();ctx.moveTo(X(0),Y(0));ctx.lineTo(pad.l+pw-3,Y(0));ctx.stroke();gDrawArrow(ctx,pad.l+pw-12,Y(0),pad.l+pw-2,Y(0));ctx.font='bold 14px Lato,sans-serif';ctx.fillText('x₁',W-31,Y(0)+27);ctx.fillText('x₂',X(0)-31,20);
 
-  // Constraint lines
-  const colors = ['#1a2744','#b8922a','#2a7a4e','#7a2a7a','#2a5a7a','#b83232'];
-  for (let i = 0; i < constraints.length; i++) {
-    const c = constraints[i];
-    const color = colors[i % colors.length];
-    // Draw line across the visible domain
-    let pts2 = [];
-    // At x=0: y = (rhs - a1*0)/a2
-    if (Math.abs(c.a2) > 1e-10) pts2.push({ x: 0, y: c.rhs / c.a2 });
-    // At y=0: x = rhs/a1
-    if (Math.abs(c.a1) > 1e-10) pts2.push({ x: c.rhs / c.a1, y: 0 });
-    // At x=maxX: y = (rhs - a1*maxX)/a2
-    if (Math.abs(c.a2) > 1e-10) pts2.push({ x: maxX, y: (c.rhs - c.a1 * maxX) / c.a2 });
-    // At y=maxY: x = (rhs - a2*maxY)/a1
-    if (Math.abs(c.a1) > 1e-10) pts2.push({ x: (c.rhs - c.a2 * maxY) / c.a1, y: maxY });
-    // Clamp to viewport
-    pts2 = pts2.filter(p => p.x >= -0.01 && p.x <= maxX + 0.01 && p.y >= -0.01 && p.y <= maxY + 0.01);
+  ctx.font='10px Lato,sans-serif';ctx.fillStyle='rgba(26,39,68,0.62)';ctx.textAlign='center';for(let i=1;i<=8;i++){const vx=i*maxX/8,vy=i*maxY/8;ctx.fillText(gFmt(vx),X(vx),Y(0)+17);ctx.textAlign='right';ctx.fillText(gFmt(vy),X(0)-7,Y(vy)+3);ctx.textAlign='center';}
 
-    if (pts2.length >= 2) {
-      ctx.beginPath();
-      ctx.moveTo(toCanvasX(pts2[0].x), toCanvasY(pts2[0].y));
-      ctx.lineTo(toCanvasX(pts2[pts2.length - 1].x), toCanvasY(pts2[pts2.length - 1].y));
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
-      ctx.stroke();
+  feasibleRegion.forEach((v,i)=>{const isOpt=solution&&Math.abs(v.x-solution.point.x)<1e-7&&Math.abs(v.y-solution.point.y)<1e-7;ctx.fillStyle=isOpt?'#b83232':'#1a2744';ctx.beginPath();ctx.arc(X(v.x),Y(v.y),isOpt?7:4,0,2*Math.PI);ctx.fill();ctx.fillStyle=isOpt?'#b83232':'#1a2744';ctx.font=isOpt?'bold 11px Lato,sans-serif':'10px Lato,sans-serif';ctx.fillText('('+gFmt(v.x)+', '+gFmt(v.y)+')',Math.min(W-95,X(v.x)+7),Math.max(15,Y(v.y)-7));});
 
-      // Label the line
-      const midX = (pts2[0].x + pts2[pts2.length - 1].x) / 2;
-      const midY = (pts2[0].y + pts2[pts2.length - 1].y) / 2;
-      ctx.fillStyle = color;
-      ctx.font = 'bold 11px "Lato", sans-serif';
-      ctx.fillText(`C${i + 1}`, toCanvasX(midX) + 4, toCanvasY(midY) - 4);
-    }
-  }
-
-  // Objective function iso-line through optimal (if exists)
-  if (solution) {
-    const z = solution.value;
-    const [c1, c2] = objCoeffs;
-    // c1*x + c2*y = z  →  at x=0: y=z/c2; at y=0: x=z/c1
-    let optPts = [];
-    if (Math.abs(c2) > 1e-10) {
-      optPts.push({ x: 0, y: z / c2 });
-      optPts.push({ x: maxX, y: (z - c1 * maxX) / c2 });
-    } else if (Math.abs(c1) > 1e-10) {
-      optPts.push({ x: z / c1, y: 0 });
-      optPts.push({ x: z / c1, y: maxY });
-    }
-    optPts = optPts.filter(p => p.x >= -0.01 && p.x <= maxX + 0.01 && p.y >= -0.01 && p.y <= maxY + 0.01);
-    if (optPts.length >= 2) {
-      ctx.beginPath();
-      ctx.moveTo(toCanvasX(optPts[0].x), toCanvasY(optPts[0].y));
-      ctx.lineTo(toCanvasX(optPts[optPts.length - 1].x), toCanvasY(optPts[optPts.length - 1].y));
-      ctx.strokeStyle = 'rgba(184,50,50,0.75)';
-      ctx.lineWidth = 1.8;
-      ctx.setLineDash([6, 4]);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.fillStyle = 'rgba(184,50,50,0.85)';
-      ctx.font = 'bold 10px "Lato", sans-serif';
-      ctx.fillText(`Z=${gFmt(z)}`, toCanvasX(optPts[0].x) + 4, toCanvasY(optPts[0].y) - 5);
-    }
-  }
-
-  // Axes
-  ctx.strokeStyle = 'rgba(26,39,68,0.8)';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(pad.left, pad.top); ctx.lineTo(pad.left, pad.top + plotH + 12); ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(pad.left - 12, pad.top + plotH); ctx.lineTo(pad.left + plotW, pad.top + plotH); ctx.stroke();
-
-  // Axis labels
-  ctx.fillStyle = 'rgba(26,39,68,0.85)';
-  ctx.font = 'bold 13px "Lato", sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('x₁', pad.left + plotW + 12, pad.top + plotH + 5);
-  ctx.save(); ctx.translate(pad.left - 12, pad.top - 10); ctx.fillText('x₂', 0, 0); ctx.restore();
-
-  // Tick labels
-  ctx.font = '10px "Lato", sans-serif';
-  ctx.fillStyle = 'rgba(26,39,68,0.5)';
-  ctx.textAlign = 'center';
-  for (let i = 1; i <= gridCount; i++) {
-    const val = (i * maxX / gridCount);
-    if (val <= maxX) {
-      const px = toCanvasX(val);
-      ctx.fillText(gFmt(parseFloat(val.toFixed(2))), px, pad.top + plotH + 14);
-    }
-    const val2 = (i * maxY / gridCount);
-    if (val2 <= maxY) {
-      const py = toCanvasY(val2);
-      ctx.textAlign = 'right';
-      ctx.fillText(gFmt(parseFloat(val2.toFixed(2))), pad.left - 5, py + 3);
-      ctx.textAlign = 'center';
-    }
-  }
-
-  // Corner point dots
-  for (let i = 0; i < feasibleRegion.length; i++) {
-    const v = feasibleRegion[i];
-    const cx2 = toCanvasX(v.x), cy2 = toCanvasY(v.y);
-    const isOpt = solution && Math.abs(v.x - solution.point.x) < 1e-7 && Math.abs(v.y - solution.point.y) < 1e-7;
-
-    ctx.beginPath();
-    ctx.arc(cx2, cy2, isOpt ? 7 : 5, 0, 2 * Math.PI);
-    ctx.fillStyle = isOpt ? '#b83232' : 'rgba(26,39,68,0.85)';
-    ctx.fill();
-    if (isOpt) {
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    }
-
-    // Label
-    ctx.fillStyle = isOpt ? '#b83232' : 'rgba(26,39,68,0.75)';
-    ctx.font = isOpt ? 'bold 11px "Lato", sans-serif' : '10px "Lato", sans-serif';
-    ctx.textAlign = 'left';
-    const labelX = cx2 + 8;
-    const labelY = cy2 - 6;
-    ctx.fillText(`V${i + 1}(${gFmt(v.x)}, ${gFmt(v.y)})`, labelX, labelY);
-  }
-
-  // Legend
-  const legend = gEl('gLegend');
-  const legendItems = constraints.map((_, i) =>
-    `<span style="display:inline-flex;align-items:center;gap:5px;">
-      <span style="width:20px;height:3px;background:${colors[i % colors.length]};display:inline-block;"></span> C${i+1}
-    </span>`
-  );
-  legendItems.push(`<span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:20px;height:3px;background:rgba(42,122,78,0.5);display:inline-block;border-top:2px dashed rgba(42,122,78,0.5);"></span> Feasible Region</span>`);
-  if (solution) legendItems.push(`<span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:20px;height:3px;background:rgba(184,50,50,0.75);display:inline-block;border-top:2px dashed rgba(184,50,50,0.6);"></span> Optimal Iso-line (Z=${gFmt(solution.value)})</span>`);
-  legend.innerHTML = legendItems.join('');
+  const legend=gEl('gLegend');const items=constraints.map((_,i)=>`<span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:20px;height:3px;background:#1a2744;display:inline-block;"></span> C${i+1}</span>`);items.push(`<span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:18px;height:10px;background:rgba(42,122,78,0.22);display:inline-block;"></span> Feasible region</span>`);if(solution)items.push(`<span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:20px;height:3px;border-top:2px dashed #b83232;display:inline-block;"></span> Objective function</span>`);legend.innerHTML=items.join('');
 }
