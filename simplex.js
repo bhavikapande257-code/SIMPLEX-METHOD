@@ -529,3 +529,13 @@ function classifySimplexResult(result) {
   }
   return 'unknown';
 }
+
+
+// Result classification helper used by the Optimalist UI.
+function classifyPostResult(result) {
+  if (!result) return { type: 'unknown', message: 'No result was produced.' };
+  if (result.status === 'optimal') return { type: 'optimal', message: 'A finite optimal solution was found.' };
+  if (result.status === 'unbounded') return { type: 'unbounded', message: 'The objective can improve indefinitely in an improving feasible direction.' };
+  if (result.status === 'infeasible') return { type: 'infeasible', message: 'No feasible solution satisfies all constraints.' };
+  return { type: 'unknown', message: 'The solver did not produce a recognised final status.' };
+}
