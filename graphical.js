@@ -355,8 +355,43 @@ function gLineSegment(a,b,rhs,maxX,maxY){
   const u=[];pts.forEach(q=>{if(!u.some(p=>Math.abs(p.x-q.x)<1e-8&&Math.abs(p.y-q.y)<1e-8))u.push(q);});
   if(u.length<=2)return u;let best=[u[0],u[1]],d=-1;for(let i=0;i<u.length;i++)for(let j=i+1;j<u.length;j++){const dd=(u[i].x-u[j].x)**2+(u[i].y-u[j].y)**2;if(dd>d){d=dd;best=[u[i],u[j]];}}return best;
 }
-function gConstraintLabel(c,i){const sign=c.sign==='leq'?'≤':c.sign==='geq'?'≥':'=';return `C${i+1}: ${c.a1}x₁ ${c.a2<0?'−':'+'} ${Math.abs(c.a2)}x₂ ${sign} ${c.rhs}`;}
-function gDrawArrow(ctx,x1,y1,x2,y2,size=7){const a=Math.atan2(y2-y1,x2-x1);ctx.beginPath();ctx.moveTo(x2,y2);ctx.lineTo(x2-size*Math.cos(a-Math.PI/6),y2-size*Math.sin(a-Math.PI/6));ctx.lineTo(x2-size*Math.cos(a+Math.PI/6),y2-size*Math.sin(a+Math.PI/6));ctx.closePath();ctx.fill();}
+
+function gConstraintLabel(c){
+  const sign=c.sign==='leq'?'≤':c.sign==='geq'?'≥':'=';
+  if(Math.abs(c.a2)<1e-10)return `x₁ ${sign} ${gFmt(c.rhs/c.a1)}`;
+  if(Math.abs(c.a1)<1e-10)return `x₂ ${sign} ${gFmt(c.rhs/c.a2)}`;
+  return `${gFmt(c.a1)}x₁ ${c.a2<0?'−':'+'} ${gFmt(Math.abs(c.a2))}x₂ ${sign} ${gFmt(c.rhs)}`;
+}
+
+function gDrawArrow(ctx,x1,y1,x2,y2,size=7){
+  const a=Math.atan2(y2-y1,x2-x1);
+  ctx.beginPath();ctx.moveTo(x2,y2);
+  ctx.lineTo(x2-size*Math.cos(a-Math.PI/6),y2-size*Math.sin(a-Math.PI/6));
+  ctx.lineTo(x2-size*Math.cos(a+Math.PI/6),y2-size*Math.sin(a+Math.PI/6));
+  ctx.closePath();ctx.fill();
+}
+
+function gNiceStep(v){
+  if(v<=20)return 2;
+  if(v<=40)return 5;
+  if(v<=100)return 10;
+  return Math.pow(10,Math.floor(Math.log10(v))-1);
+}
+
+function gDrawHatchedRegion(ctx,hull,X,Y){
+  if(hull.length<3)return;
+  ctx.save();
+  ctx.beginPath();hull.forEach((p,i)=>i?ctx.lineTo(X(p.x),Y(p.y)):ctx.moveTo(X(p.x),Y(p.y)));ctx.closePath();
+  ctx.fillStyle='rgba(221,213,197,0.48)';ctx.fill();ctx.clip();
+  const xs=hull.map(p=>X(p.x)),ys=hull.map(p=>Y(p.y));
+  const minX=Math.min(...xs)-40,maxX=Math.max(...xs)+40,minY=Math.min(...ys)-40,maxY=Math.max(...ys)+40;
+  const span=(maxX-minX)+(maxY-minY);
+  ctx.strokeStyle='rgba(90,80,64,0.20)';ctx.lineWidth=0.7;
+  for(let k=-span;k<span;k+=7){ctx.beginPath();ctx.moveTo(minX+k,minY);ctx.lineTo(minX+k+span,maxY);ctx.stroke();}
+  ctx.restore();
+  ctx.save();ctx.beginPath();hull.forEach((p,i)=>i?ctx.lineTo(X(p.x),Y(p.y)):ctx.moveTo(X(p.x),Y(p.y)));ctx.closePath();
+  ctx.strokeStyle='rgba(90,80,64,0.28)';ctx.lineWidth=1;ctx.stroke();ctx.restore();
+}
 
 function drawGraph() {
   const canvas=gEl('gCanvas');if(!canvas)return;
@@ -364,26 +399,67 @@ function drawGraph() {
   canvas.width=W*dpr;canvas.height=H*dpr;canvas.style.width=W+'px';canvas.style.height=H+'px';
   const ctx=canvas.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);
   const {constraints,feasibleRegion,solution,objCoeffs,objective}=gState;
-  const all=[...feasibleRegion,{x:0,y:0}];constraints.forEach(c=>{if(Math.abs(c.a1)>1e-10)all.push({x:c.rhs/c.a1,y:0});if(Math.abs(c.a2)>1e-10)all.push({x:0,y:c.rhs/c.a2});});
+
+  const all=[...feasibleRegion,{x:0,y:0}];
+  constraints.forEach(c=>{if(Math.abs(c.a1)>1e-10)all.push({x:c.rhs/c.a1,y:0});if(Math.abs(c.a2)>1e-10)all.push({x:0,y:c.rhs/c.a2});});
   const finite=all.filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)&&p.x>=-1e-8&&p.y>=-1e-8);
-  let maxX=Math.max(5,...finite.map(p=>p.x)),maxY=Math.max(5,...finite.map(p=>p.y));maxX*=1.28;maxY*=1.28;
-  const pad={l:66,r:28,t:38,b:58},pw=W-pad.l-pad.r,ph=H-pad.t-pad.b,X=x=>pad.l+(x/maxX)*pw,Y=y=>pad.t+ph-(y/maxY)*ph;
+  const rawX=Math.max(5,...finite.map(p=>p.x)),rawY=Math.max(5,...finite.map(p=>p.y));
+  const stepX=gNiceStep(rawX),stepY=gNiceStep(rawY);
+  const maxX=Math.max(stepX*3,Math.ceil(rawX/stepX)*stepX+stepX),maxY=Math.max(stepY*3,Math.ceil(rawY/stepY)*stepY+stepY);
+  const pad={l:66,r:28,t:38,b:58},pw=W-pad.l-pad.r,ph=H-pad.t-pad.b;
+  const X=x=>pad.l+(x/maxX)*pw,Y=y=>pad.t+ph-(y/maxY)*ph;
+
   ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
-  ctx.strokeStyle='rgba(26,39,68,0.07)';ctx.lineWidth=1;for(let i=0;i<=10;i++){const gx=X(i*maxX/10),gy=Y(i*maxY/10);ctx.beginPath();ctx.moveTo(gx,pad.t);ctx.lineTo(gx,pad.t+ph);ctx.stroke();ctx.beginPath();ctx.moveTo(pad.l,gy);ctx.lineTo(pad.l+pw,gy);ctx.stroke();}
+  ctx.strokeStyle='rgba(26,39,68,0.055)';ctx.lineWidth=1;
+  for(let x=0;x<=maxX+1e-9;x+=stepX){const gx=X(x);ctx.beginPath();ctx.moveTo(gx,pad.t);ctx.lineTo(gx,pad.t+ph);ctx.stroke();}
+  for(let y=0;y<=maxY+1e-9;y+=stepY){const gy=Y(y);ctx.beginPath();ctx.moveTo(pad.l,gy);ctx.lineTo(pad.l+pw,gy);ctx.stroke();}
 
-  if(feasibleRegion.length>=3){const hull=convexHull(feasibleRegion);ctx.beginPath();hull.forEach((p,i)=>i?ctx.lineTo(X(p.x),Y(p.y)):ctx.moveTo(X(p.x),Y(p.y)));ctx.closePath();ctx.fillStyle='rgba(42,122,78,0.22)';ctx.fill();ctx.strokeStyle='rgba(42,122,78,0.55)';ctx.lineWidth=1.5;ctx.stroke();}
+  gDrawHatchedRegion(ctx,convexHull(feasibleRegion),X,Y);
 
-  constraints.forEach((c,i)=>{const pts=gLineSegment(c.a1,c.a2,c.rhs,maxX,maxY);if(pts.length!==2)return;ctx.strokeStyle='#1a2744';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(X(pts[0].x),Y(pts[0].y));ctx.lineTo(X(pts[1].x),Y(pts[1].y));ctx.stroke();const m={x:(pts[0].x+pts[1].x)/2,y:(pts[0].y+pts[1].y)/2};ctx.fillStyle='#1a2744';ctx.font='bold 10px Lato,sans-serif';ctx.fillText(gConstraintLabel(c,i),Math.min(W-175,X(m.x)+6),Math.max(16,Y(m.y)-6));});
+  const lineColours=['#1657c8','#d83a2e','#2b8a3e','#7b4ab5','#d28b20','#168a8a'];
+  constraints.forEach((c,i)=>{
+    const pts=gLineSegment(c.a1,c.a2,c.rhs,maxX,maxY);if(pts.length!==2)return;
+    ctx.strokeStyle=lineColours[i%lineColours.length];ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(X(pts[0].x),Y(pts[0].y));ctx.lineTo(X(pts[1].x),Y(pts[1].y));ctx.stroke();
+    const t=Math.min(.74,Math.max(.27,.40+i*.13));
+    const lx=pts[0].x+(pts[1].x-pts[0].x)*t,ly=pts[0].y+(pts[1].y-pts[0].y)*t;
+    ctx.fillStyle=lineColours[i%lineColours.length];ctx.font='bold 10px Lato,sans-serif';ctx.textAlign='left';
+    ctx.fillText(gConstraintLabel(c),Math.min(W-170,X(lx)+5),Math.max(16,Y(ly)-5));
+  });
 
-  if(solution&&objCoeffs.length>=2&&(Math.abs(objCoeffs[0])>1e-10||Math.abs(objCoeffs[1])>1e-10)){
-    const z=solution.value,pts=gLineSegment(objCoeffs[0],objCoeffs[1],z,maxX,maxY);if(pts.length===2){ctx.strokeStyle='#b83232';ctx.lineWidth=2.2;ctx.setLineDash([9,6]);ctx.beginPath();ctx.moveTo(X(pts[0].x),Y(pts[0].y));ctx.lineTo(X(pts[1].x),Y(pts[1].y));ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='#b83232';ctx.font='bold 11px Lato,sans-serif';ctx.fillText(`${objective==='max'?'Max':'Min'} Z = ${objCoeffs[0]}x₁ ${objCoeffs[1]<0?'−':'+'} ${Math.abs(objCoeffs[1])}x₂`,Math.min(W-190,X(pts[1].x)-90),Math.max(18,Y(pts[1].y)-8));}
+  if(solution&&(Math.abs(objCoeffs[0])>1e-10||Math.abs(objCoeffs[1])>1e-10)){
+    const z=solution.value,pts=gLineSegment(objCoeffs[0],objCoeffs[1],z,maxX,maxY);
+    if(pts.length===2){
+      ctx.strokeStyle='#7b3fb3';ctx.lineWidth=2;ctx.setLineDash([8,6]);ctx.beginPath();ctx.moveTo(X(pts[0].x),Y(pts[0].y));ctx.lineTo(X(pts[1].x),Y(pts[1].y));ctx.stroke();ctx.setLineDash([]);
+      const q=pts[0].x>pts[1].x?pts[0]:pts[1];ctx.fillStyle='#7b3fb3';ctx.font='bold 10px Lato,sans-serif';
+      ctx.fillText(`${objective==='max'?'Max':'Min'} Z = ${gFmt(objCoeffs[0])}x₁ ${objCoeffs[1]<0?'−':'+'} ${gFmt(Math.abs(objCoeffs[1]))}x₂ = ${gFmt(z)}`,Math.min(W-230,X(q.x)-95),Math.max(18,Y(q.y)-8));
+    }
   }
 
-  ctx.strokeStyle='#1a2744';ctx.fillStyle='#1a2744';ctx.lineWidth=1.8;ctx.beginPath();ctx.moveTo(X(0),Y(0));ctx.lineTo(X(0),pad.t+4);ctx.stroke();gDrawArrow(ctx,X(0),pad.t+12,X(0),pad.t+2);ctx.beginPath();ctx.moveTo(X(0),Y(0));ctx.lineTo(pad.l+pw-3,Y(0));ctx.stroke();gDrawArrow(ctx,pad.l+pw-12,Y(0),pad.l+pw-2,Y(0));ctx.font='bold 14px Lato,sans-serif';ctx.fillText('x₁',W-31,Y(0)+27);ctx.fillText('x₂',X(0)-31,20);
+  ctx.strokeStyle='#111';ctx.fillStyle='#111';ctx.lineWidth=1.8;
+  ctx.beginPath();ctx.moveTo(X(0),Y(0));ctx.lineTo(X(0),pad.t+4);ctx.stroke();gDrawArrow(ctx,X(0),pad.t+12,X(0),pad.t+2);
+  ctx.beginPath();ctx.moveTo(X(0),Y(0));ctx.lineTo(pad.l+pw-3,Y(0));ctx.stroke();gDrawArrow(ctx,pad.l+pw-12,Y(0),pad.l+pw-2,Y(0));
+  ctx.font='bold 14px Lato,sans-serif';ctx.textAlign='left';ctx.fillText('x₁',W-31,Y(0)+27);ctx.fillText('x₂',X(0)-31,20);
 
-  ctx.font='10px Lato,sans-serif';ctx.fillStyle='rgba(26,39,68,0.62)';ctx.textAlign='center';for(let i=1;i<=8;i++){const vx=i*maxX/8,vy=i*maxY/8;ctx.fillText(gFmt(vx),X(vx),Y(0)+17);ctx.textAlign='right';ctx.fillText(gFmt(vy),X(0)-7,Y(vy)+3);ctx.textAlign='center';}
+  ctx.font='10px Lato,sans-serif';ctx.fillStyle='rgba(26,39,68,0.72)';ctx.textAlign='center';
+  for(let x=stepX;x<maxX-1e-9;x+=stepX)ctx.fillText(gFmt(x),X(x),Y(0)+17);
+  ctx.textAlign='right';for(let y=stepY;y<maxY-1e-9;y+=stepY)ctx.fillText(gFmt(y),X(0)-7,Y(y)+3);
 
-  feasibleRegion.forEach((v,i)=>{const isOpt=solution&&Math.abs(v.x-solution.point.x)<1e-7&&Math.abs(v.y-solution.point.y)<1e-7;ctx.fillStyle=isOpt?'#b83232':'#1a2744';ctx.beginPath();ctx.arc(X(v.x),Y(v.y),isOpt?7:4,0,2*Math.PI);ctx.fill();ctx.fillStyle=isOpt?'#b83232':'#1a2744';ctx.font=isOpt?'bold 11px Lato,sans-serif':'10px Lato,sans-serif';ctx.fillText('('+gFmt(v.x)+', '+gFmt(v.y)+')',Math.min(W-95,X(v.x)+7),Math.max(15,Y(v.y)-7));});
+  feasibleRegion.forEach(v=>{
+    const isOpt=solution&&Math.abs(v.x-solution.point.x)<1e-7&&Math.abs(v.y-solution.point.y)<1e-7;
+    ctx.fillStyle='#111';ctx.beginPath();ctx.arc(X(v.x),Y(v.y),isOpt?3.5:3,0,2*Math.PI);ctx.fill();
+    ctx.fillStyle=isOpt?'#d32620':'#222';ctx.font=isOpt?'bold 11px Lato,sans-serif':'10px Lato,sans-serif';ctx.textAlign='left';
+    const dx=X(v.x)>W-105?-75:7;ctx.fillText('('+gFmt(v.x)+', '+gFmt(v.y)+')',X(v.x)+dx,Math.max(15,Y(v.y)-7));
+  });
 
-  const legend=gEl('gLegend');const items=constraints.map((_,i)=>`<span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:20px;height:3px;background:#1a2744;display:inline-block;"></span> C${i+1}</span>`);items.push(`<span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:18px;height:10px;background:rgba(42,122,78,0.22);display:inline-block;"></span> Feasible region</span>`);if(solution)items.push(`<span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:20px;height:3px;border-top:2px dashed #b83232;display:inline-block;"></span> Objective function</span>`);legend.innerHTML=items.join('');
+  if(solution){
+    const px=solution.point.x,py=solution.point.y;ctx.fillStyle='#e22f25';ctx.beginPath();ctx.arc(X(px),Y(py),8,0,2*Math.PI);ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();ctx.fillStyle='#d32620';ctx.font='bold 11px Lato,sans-serif';ctx.textAlign='left';
+    ctx.fillText('Optimal Point ('+gFmt(px)+', '+gFmt(py)+')',Math.min(W-165,X(px)+10),Math.max(16,Y(py)-10));
+  }
+
+  const legendX=W-190,legendY=48;ctx.fillStyle='rgba(255,255,255,.94)';ctx.strokeStyle='rgba(26,39,68,.22)';ctx.lineWidth=1;ctx.fillRect(legendX,legendY,170,58);ctx.strokeRect(legendX,legendY,170,58);
+  ctx.fillStyle='#111';ctx.font='9px Lato,sans-serif';ctx.textAlign='left';
+  constraints.slice(0,3).forEach((c,i)=>{ctx.strokeStyle=lineColours[i];ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(legendX+8,legendY+13+i*14);ctx.lineTo(legendX+25,legendY+13+i*14);ctx.stroke();ctx.fillStyle='#222';ctx.fillText('C'+(i+1),legendX+31,legendY+16+i*14);});
+  ctx.fillStyle='rgba(221,213,197,.8)';ctx.fillRect(legendX+88,legendY+8,16,10);ctx.fillStyle='#222';ctx.fillText('Feasible',legendX+109,legendY+17);
 }
