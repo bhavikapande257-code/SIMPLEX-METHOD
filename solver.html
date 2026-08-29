@@ -354,6 +354,18 @@
       .page { padding: 2rem 1rem 5rem; }
     }
 
+
+    /* ── Post-result analysis & automatic Simplex graphs ── */
+    .analysis-panel { margin-top: 1.5rem; border-top: 3px solid var(--gold); }
+    .analysis-panel .analysis-lead { color:var(--muted); line-height:1.75; font-size:0.9rem; margin-bottom:1rem; }
+    .analysis-list { margin:0; padding-left:1.25rem; color:var(--text); }
+    .analysis-list li { margin:0.7rem 0; line-height:1.65; }
+    .analysis-label { color:var(--navy); font-weight:700; }
+    .iteration-graph-panel { margin:1.2rem 0 2rem; padding:1.2rem; border:1px solid var(--rule); background:rgba(255,255,255,0.72); }
+    .iteration-graph-title { font-family:'EB Garamond',serif; font-size:1rem; font-weight:700; color:var(--navy); margin-bottom:0.75rem; }
+    .iteration-graph-note { font-size:0.75rem; color:var(--muted); margin-top:0.65rem; line-height:1.5; text-align:center; }
+    .iteration-graph-canvas { width:100%; max-width:560px; height:auto; display:block; margin:0 auto; border:1px solid var(--rule); background:#fff; }
+
     /* ── Learn Mode Toggle ── */
     .learn-toggle-wrap { display:inline-flex; align-items:center; cursor:pointer; user-select:none; }
     .learn-toggle-wrap input { display:none; }
@@ -860,7 +872,7 @@
         }
 
         if (pivotRow === -1) {
-          steps.push({ type: 'unbounded', message: 'No positive elements in pivot column. Problem is unbounded.' });
+          steps.push({ type: 'unbounded', entering: colNames[pivotCol], pivotCol, message: 'No positive elements in pivot column. Problem is unbounded.' });
           return { status: 'unbounded', steps, notes, solution: null };
         }
 
@@ -1072,7 +1084,7 @@
         }
 
         if (pivotRow === -1) {
-          steps.push({ type: 'unbounded', message: 'No positive elements in pivot column. Unbounded.' });
+          steps.push({ type: 'unbounded', entering: colNames[pivotCol], pivotCol, message: 'No positive elements in pivot column. Unbounded.' });
           return { status: 'unbounded', steps, notes, solution: null };
         }
 
@@ -1656,6 +1668,181 @@
       }
     }
 
+    // ── Post-Result Analysis ─────────────────────────────────────
+    function getFinalOptimalStep(result) {
+      for (let i = result.steps.length - 1; i >= 0; i--) {
+        if (result.steps[i].type === 'optimal' && result.steps[i].label !== 'Phase 1') return result.steps[i];
+      }
+      for (let i = result.steps.length - 1; i >= 0; i--) {
+        if (result.steps[i].type === 'optimal') return result.steps[i];
+      }
+      return null;
+    }
+
+    function buildPostResultAnalysis(result, choice, numVars, obj, constraints, signs, rhs, varSigns) {
+      const panel = document.createElement('div');
+      panel.className = 'panel analysis-panel';
+      let html = `<div class="panel-title">Post-Result Analysis</div>`;
+      const bullets = [];
+
+      if (result.status === 'optimal' && result.solution) {
+        const sol = result.solution;
+        const point = sol.vars.map(v => `${v.name} = <strong>${v.value}</strong>`).join(', ');
+        const finalStep = getFinalOptimalStep(result);
+        let alternate = false;
+        let alternateVars = [];
+        let degenerate = false;
+
+        if (finalStep && finalStep.tableau && finalStep.basics) {
+          const basicSet = new Set(finalStep.basics);
+          // A zero reduced cost in a non-basic decision-variable column indicates an alternate optimum.
+          for (let j = 0; j < Math.min(numVars, finalStep.colNames.length - 1); j++) {
+            if (!basicSet.has(j) && frac(finalStep.tableau[0][j]).eq(frac(0))) {
+              alternate = true;
+              alternateVars.push(finalStep.colNames[j]);
+            }
+          }
+          const rhsIndex = finalStep.tableau[0].length - 1;
+          for (let r = 0; r < finalStep.basics.length; r++) {
+            if (frac(finalStep.tableau[r + 1][rhsIndex]).eq(frac(0))) {
+              degenerate = true;
+              break;
+            }
+          }
+        }
+
+        bullets.push(`<span class="analysis-label">Optimal point:</span> The algorithm has reached the point (${point}) in the decision-variable space.`);
+        bullets.push(`<span class="analysis-label">Meaning of the result:</span> ${choice === 'max' ? 'This point gives the maximum' : 'This point gives the minimum'} objective value, <strong>Z = ${sol.z}</strong>.`);
+
+        if (alternate) {
+          bullets.push(`<span class="analysis-label">Multiple optimal solutions:</span> The final tableau contains a zero reduced cost for the non-basic decision variable(s) <strong>${alternateVars.join(', ')}</strong>. Moving along the corresponding feasible edge can produce another solution with the same optimal objective value.`);
+        } else {
+          bullets.push(`<span class="analysis-label">Uniqueness:</span> No non-basic decision variable has a zero reduced cost in the final tableau, so the final basic feasible solution is the unique optimum detected by this tableau.`);
+        }
+
+        if (degenerate) {
+          bullets.push(`<span class="analysis-label">Degeneracy:</span> At least one basic variable is zero at the final basic feasible solution. The optimum is therefore degenerate.`);
+        }
+
+        if (numVars === 2 && varSigns[0] === 'pos' && varSigns[1] === 'pos') {
+          bullets.push(`<span class="analysis-label">Geometric interpretation:</span> In the two-variable case, Simplex has arrived at a vertex of the feasible region. The graph below shows the point reached by the corresponding tableau.`);
+        }
+      } else if (result.status === 'unbounded') {
+        const u = [...result.steps].reverse().find(s => s.type === 'unbounded');
+        const entering = u && u.entering ? u.entering : null;
+        bullets.push(`<span class="analysis-label">Unboundedness:</span> The algorithm found an entering variable for which no constraint supplies a limiting positive coefficient in the ratio test.`);
+        if (entering) {
+          bullets.push(`<span class="analysis-label">Direction of improvement:</span> ${choice === 'max' ? `Increasing <strong>${entering}</strong> allows the objective to increase indefinitely.` : `Increasing <strong>${entering}</strong> allows the original minimisation objective to decrease indefinitely.`}`);
+        } else {
+          bullets.push(`<span class="analysis-label">Direction of improvement:</span> The improving direction is the direction associated with the entering variable identified in the last Simplex tableau.`);
+        }
+        bullets.push(`<span class="analysis-label">Interpretation:</span> There is no finite optimal point because the feasible region contains an improving ray.`);
+      } else if (result.status === 'infeasible') {
+        bullets.push(`<span class="analysis-label">Infeasibility:</span> The constraints have no common feasible solution.`);
+        const p1 = result.steps.some(s => s.label === 'Phase 1');
+        if (p1) bullets.push(`<span class="analysis-label">Why?</span> Phase 1 could not reduce its artificial-variable objective to zero, so no point satisfies all the constraints simultaneously.`);
+        else bullets.push(`<span class="analysis-label">Interpretation:</span> The solver could not establish a feasible basic solution for all the constraints.`);
+      }
+
+      if (!bullets.length) return null;
+      html += `<p class="analysis-lead">This section interprets the outcome of the Simplex procedure rather than simply repeating the final numbers.</p>`;
+      html += `<ul class="analysis-list">${bullets.map(b => `<li>${b}</li>`).join('')}</ul>`;
+      panel.innerHTML = html;
+      return panel;
+    }
+
+    // ── Automatic graph for two-variable Simplex iterations ─────
+    function simplexPointFromStep(step) {
+      if (!step || !step.tableau || !step.basics || !step.colNames) return null;
+      const rhs = step.tableau[0].length - 1;
+      const values = [0, 0];
+      for (let r = 0; r < step.basics.length; r++) {
+        const b = step.basics[r];
+        if (b === 0 || b === 1) values[b] = toGraphNum(step.tableau[r + 1][rhs]);
+      }
+      return { x: values[0], y: values[1] };
+    }
+
+    function toGraphNum(v) {
+      const str = String(v).trim();
+      if (str.includes('/')) {
+        const p = str.split('/');
+        return Number(p[0]) / Number(p[1]);
+      }
+      const n = Number(str);
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    function graphSatisfies(pt, c) {
+      const lhs = c[0] * pt.x + c[1] * pt.y;
+      const rhsVal = c[2];
+      const sign = c[3];
+      const eps = 1e-8;
+      if (sign === '<=') return lhs <= rhsVal + eps;
+      if (sign === '>=') return lhs >= rhsVal - eps;
+      return Math.abs(lhs - rhsVal) <= eps;
+    }
+
+    function getGraphVertices(constraints) {
+      const lines = [];
+      constraints.forEach((c, i) => lines.push({ a:c[0], b:c[1], r:c[2], name:`C${i+1}` }));
+      lines.push({ a:1, b:0, r:0, name:'x₁ = 0' });
+      lines.push({ a:0, b:1, r:0, name:'x₂ = 0' });
+      const pts = [];
+      for (let i = 0; i < lines.length; i++) {
+        for (let j = i + 1; j < lines.length; j++) {
+          const det = lines[i].a * lines[j].b - lines[j].a * lines[i].b;
+          if (Math.abs(det) < 1e-10) continue;
+          const x = (lines[i].r * lines[j].b - lines[j].r * lines[i].b) / det;
+          const y = (lines[i].a * lines[j].r - lines[j].a * lines[i].r) / det;
+          if (x >= -1e-8 && y >= -1e-8 && constraints.every(c => graphSatisfies({x,y},c))) pts.push({x:Math.max(0,x),y:Math.max(0,y)});
+        }
+      }
+      const unique = [];
+      pts.forEach(p => { if (!unique.some(q => Math.abs(q.x-p.x)<1e-7 && Math.abs(q.y-p.y)<1e-7)) unique.push(p); });
+      return unique;
+    }
+
+    function graphHull(points) {
+      if (points.length <= 2) return points.slice();
+      const pts = [...points].sort((a,b) => a.x-b.x || a.y-b.y);
+      const cross = (o,a,b) => (a.x-o.x)*(b.y-o.y) - (a.y-o.y)*(b.x-o.x);
+      const lower=[]; for (const p of pts) { while(lower.length>=2 && cross(lower[lower.length-2],lower[lower.length-1],p)<=1e-10) lower.pop(); lower.push(p); }
+      const upper=[]; for (let i=pts.length-1;i>=0;i--) { const p=pts[i]; while(upper.length>=2 && cross(upper[upper.length-2],upper[upper.length-1],p)<=1e-10) upper.pop(); upper.push(p); }
+      upper.pop(); lower.pop(); return lower.concat(upper);
+    }
+
+    function drawSimplexIterationGraph(canvasId, constraints, step, obj, choice, isFinal) {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas) return;
+      const W = Math.min(canvas.parentElement.clientWidth - 20, 560), H = W;
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = W*dpr; canvas.height = H*dpr; canvas.style.width=W+'px'; canvas.style.height=H+'px';
+      const ctx = canvas.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+      const verts = getGraphVertices(constraints);
+      const point = simplexPointFromStep(step);
+      const all = [...verts]; if (point) all.push(point); all.push({x:0,y:0});
+      constraints.forEach(c => { if (Math.abs(c[0])>1e-10) all.push({x:c[2]/c[0],y:0}); if (Math.abs(c[1])>1e-10) all.push({x:0,y:c[2]/c[1]}); });
+      const finite = all.filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)&&p.x>=-1e-8&&p.y>=-1e-8);
+      let maxX=Math.max(5,...finite.map(p=>p.x)), maxY=Math.max(5,...finite.map(p=>p.y)); maxX*=1.22; maxY*=1.22;
+      const pad={l:48,r:20,t:20,b:42}, pw=W-pad.l-pad.r, ph=H-pad.t-pad.b;
+      const X=x=>pad.l+(x/maxX)*pw, Y=y=>pad.t+ph-(y/maxY)*ph;
+      ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H);
+      // axes
+      ctx.strokeStyle='#7b8190'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(X(0),pad.t); ctx.lineTo(X(0),pad.t+ph); ctx.lineTo(pad.l+pw,pad.t+ph); ctx.stroke();
+      ctx.fillStyle='#666'; ctx.font='11px Lato, sans-serif'; ctx.fillText('x₁',pad.l+pw-12,pad.t+ph+28); ctx.fillText('x₂',X(0)-24,pad.t+8);
+      // feasible polygon
+      const hull=graphHull(verts); if(hull.length>=3){ ctx.beginPath(); hull.forEach((p,i)=>i?ctx.lineTo(X(p.x),Y(p.y)):ctx.moveTo(X(p.x),Y(p.y))); ctx.closePath(); ctx.fillStyle='rgba(42,122,78,0.10)'; ctx.fill(); ctx.strokeStyle='rgba(42,122,78,0.35)'; ctx.stroke(); }
+      // constraint lines
+      constraints.forEach((c,i)=>{ const pts=[]; if(Math.abs(c[1])>1e-10){pts.push({x:0,y:c[2]/c[1]});pts.push({x:maxX,y:(c[2]-c[0]*maxX)/c[1]});} else if(Math.abs(c[0])>1e-10){const x=c[2]/c[0];pts.push({x,y:0});pts.push({x,y:maxY});} if(pts.length===2){ctx.strokeStyle='rgba(26,39,68,0.55)';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(X(pts[0].x),Y(pts[0].y));ctx.lineTo(X(pts[1].x),Y(pts[1].y));ctx.stroke();ctx.fillStyle='#1a2744';ctx.font='10px Lato, sans-serif';ctx.fillText('C'+(i+1),Math.max(pad.l+2,X(Math.max(0,pts[0].x))),Math.max(pad.t+12,Y(Math.max(0,pts[0].y))-4));}});
+      // vertices
+      ctx.fillStyle='#7b8190'; verts.forEach(p=>{ctx.beginPath();ctx.arc(X(p.x),Y(p.y),3,0,Math.PI*2);ctx.fill();});
+      // current BFS
+      if(point && Number.isFinite(point.x)&&Number.isFinite(point.y)){ctx.fillStyle=isFinal?'#b8922a':'#b83232';ctx.beginPath();ctx.arc(X(Math.max(0,point.x)),Y(Math.max(0,point.y)),6,0,Math.PI*2);ctx.fill();ctx.fillStyle='#1a2744';ctx.font='bold 11px Lato, sans-serif';ctx.fillText(isFinal?'Optimal point':'Current BFS',Math.min(W-85,X(Math.max(0,point.x))+8),Math.max(12,Y(Math.max(0,point.y))-8));}
+      // objective direction cue
+      if(obj && obj.length>=2){const ox=obj[0],oy=obj[1]; const len=Math.hypot(ox,oy)||1; const scale=Math.min(maxX/(Math.abs(ox)||1),maxY/(Math.abs(oy)||1))*0.08; const dx=(ox/len)*scale,dy=(oy/len)*scale*(choice==='min'?-1:1); const sx=X(Math.max(0,point?point.x:maxX*0.25)), sy=Y(Math.max(0,point?point.y:maxY*0.25)); ctx.strokeStyle='#b8922a';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(X(Math.max(0,(point?point.x:maxX*.25)+dx)),Y(Math.max(0,(point?point.y:maxY*.25)+dy)));ctx.stroke();}
+    }
+
     function renderResults(result, choice, numVars, method, obj, constraints, signs, rhs, varSigns) {
       // Persist args so Learn Mode toggle can re-render
       _lastRenderArgs = [result, choice, numVars, method, obj, constraints, signs, rhs, varSigns];
@@ -1724,6 +1911,11 @@
           }
 
           block.innerHTML += renderTableau(step.tableau, step.basics, step.colNames, step.pivotCol, step.pivotRow, step.ratios, step.type === 'optimal');
+          if (numVars === 2 && varSigns[0] === 'pos' && varSigns[1] === 'pos') {
+            const graphId = `simplexGraph_${stepIdx}`;
+            block.innerHTML += `<div class="iteration-graph-panel"><div class="iteration-graph-title">${step.type === 'optimal' ? 'Graph — Final Basic Feasible Solution' : 'Graph — Current Basic Feasible Solution'}</div><canvas id="${graphId}" class="iteration-graph-canvas"></canvas><div class="iteration-graph-note">The highlighted point is the basic feasible solution represented by this tableau.</div></div>`;
+            setTimeout(() => drawSimplexIterationGraph(graphId, constraints, step, obj, choice, step.type === 'optimal'), 20);
+          }
         }
 
         if (step.type === 'infeasible') block.innerHTML = `<div class="msg-box msg-warn">⚠ ${step.message}</div>`;
@@ -1770,6 +1962,9 @@
         solHTML += `</div></div>`;
         area.innerHTML += solHTML;
       }
+
+      const analysis = buildPostResultAnalysis(result, choice, numVars, obj, constraints, signs, rhs, varSigns);
+      if (analysis) area.appendChild(analysis);
 
       resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
