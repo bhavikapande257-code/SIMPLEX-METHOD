@@ -1752,6 +1752,9 @@
     }
 
     // ── Automatic graph for two-variable Simplex iterations ─────
+    // These graphs intentionally mirror the visual language of the reference:
+    // coloured constraint lines, hatched feasible region, objective contour,
+    // labelled vertices, and a clearly highlighted current/optimal BFS.
     function simplexPointFromStep(step) {
       if (!step || !step.tableau || !step.basics || !step.colNames) return null;
       const rhs = step.tableau[0].length - 1;
@@ -1795,11 +1798,15 @@
           if (Math.abs(det) < 1e-10) continue;
           const x = (lines[i].r * lines[j].b - lines[j].r * lines[i].b) / det;
           const y = (lines[i].a * lines[j].r - lines[j].a * lines[i].r) / det;
-          if (x >= -1e-8 && y >= -1e-8 && constraints.every(c => graphSatisfies({x,y},c))) pts.push({x:Math.max(0,x),y:Math.max(0,y)});
+          if (x >= -1e-8 && y >= -1e-8 && constraints.every(c => graphSatisfies({x,y},c))) {
+            pts.push({x:Math.max(0,x),y:Math.max(0,y)});
+          }
         }
       }
       const unique = [];
-      pts.forEach(p => { if (!unique.some(q => Math.abs(q.x-p.x)<1e-7 && Math.abs(q.y-p.y)<1e-7)) unique.push(p); });
+      pts.forEach(p => {
+        if (!unique.some(q => Math.abs(q.x-p.x)<1e-7 && Math.abs(q.y-p.y)<1e-7)) unique.push(p);
+      });
       return unique;
     }
 
@@ -1807,9 +1814,19 @@
       if (points.length <= 2) return points.slice();
       const pts = [...points].sort((a,b) => a.x-b.x || a.y-b.y);
       const cross = (o,a,b) => (a.x-o.x)*(b.y-o.y) - (a.y-o.y)*(b.x-o.x);
-      const lower=[]; for (const p of pts) { while(lower.length>=2 && cross(lower[lower.length-2],lower[lower.length-1],p)<=1e-10) lower.pop(); lower.push(p); }
-      const upper=[]; for (let i=pts.length-1;i>=0;i--) { const p=pts[i]; while(upper.length>=2 && cross(upper[upper.length-2],upper[upper.length-1],p)<=1e-10) upper.pop(); upper.push(p); }
-      upper.pop(); lower.pop(); return lower.concat(upper);
+      const lower=[];
+      for (const p of pts) {
+        while(lower.length>=2 && cross(lower[lower.length-2],lower[lower.length-1],p)<=1e-10) lower.pop();
+        lower.push(p);
+      }
+      const upper=[];
+      for (let i=pts.length-1;i>=0;i--) {
+        const p=pts[i];
+        while(upper.length>=2 && cross(upper[upper.length-2],upper[upper.length-1],p)<=1e-10) upper.pop();
+        upper.push(p);
+      }
+      upper.pop(); lower.pop();
+      return lower.concat(upper);
     }
 
     function graphLineSegment(a, b, rhs, maxX, maxY) {
@@ -1826,7 +1843,6 @@
         if (x0 >= 0 && x0 <= maxX) pts.push({x:x0,y:0});
         if (xY >= 0 && xY <= maxX) pts.push({x:xY,y:maxY});
       }
-      // Remove duplicates and return the two farthest visible points.
       const unique=[];
       pts.forEach(q=>{if(!unique.some(p=>Math.abs(p.x-q.x)<1e-8&&Math.abs(p.y-q.y)<1e-8))unique.push(q);});
       if(unique.length<=2)return unique;
@@ -1838,24 +1854,68 @@
       return best;
     }
 
-    function graphConstraintLabel(c, i) {
-      const sign = c[3] === '<=' ? '≤' : c[3] === '>=' ? '≥' : '=';
-      return `C${i+1}: ${c[0]}x₁ ${c[1] < 0 ? '−' : '+'} ${Math.abs(c[1])}x₂ ${sign} ${c[2]}`;
+    function graphConstraintLabel(c) {
+      const a = c[0], b = c[1], r = c[2], sign = c[3] === '<=' ? '≤' : c[3] === '>=' ? '≥' : '=';
+      if (Math.abs(b) < 1e-10) return `x₁ ${sign} ${fmtGraphCoord(r/a)}`;
+      if (Math.abs(a) < 1e-10) return `x₂ ${sign} ${fmtGraphCoord(r/b)}`;
+      return `${fmtGraphCoord(a)}x₁ ${b < 0 ? '−' : '+'} ${fmtGraphCoord(Math.abs(b))}x₂ ${sign} ${fmtGraphCoord(r)}`;
     }
 
-    function graphObjectiveLabel(obj, choice) {
-      const sign = choice === 'min' ? 'Min' : 'Max';
+    function graphObjectiveLabel(obj, choice, z) {
       const a=obj[0], b=obj[1];
-      return `${sign} Z = ${a}x₁ ${b < 0 ? '−' : '+'} ${Math.abs(b)}x₂`;
+      return `${choice === 'min' ? 'Min' : 'Max'} Z = ${fmtGraphCoord(a)}x₁ ${b < 0 ? '−' : '+'} ${fmtGraphCoord(Math.abs(b))}x₂ = ${fmtGraphCoord(z)}`;
     }
 
-    function drawGraphArrow(ctx, x1, y1, x2, y2, size=6) {
+    function drawGraphArrow(ctx, x1, y1, x2, y2, size=7) {
       const ang=Math.atan2(y2-y1,x2-x1);
       ctx.beginPath();
       ctx.moveTo(x2,y2);
       ctx.lineTo(x2-size*Math.cos(ang-Math.PI/6),y2-size*Math.sin(ang-Math.PI/6));
       ctx.lineTo(x2-size*Math.cos(ang+Math.PI/6),y2-size*Math.sin(ang+Math.PI/6));
       ctx.closePath(); ctx.fill();
+    }
+
+    function niceGraphStep(maxValue) {
+      if (maxValue <= 10) return 2;
+      if (maxValue <= 20) return 2;
+      if (maxValue <= 40) return 5;
+      if (maxValue <= 100) return 10;
+      return Math.pow(10, Math.floor(Math.log10(maxValue)) - 1);
+    }
+
+    function drawHatchedRegion(ctx, hull, X, Y) {
+      if (hull.length < 3) return;
+      ctx.save();
+      ctx.beginPath();
+      hull.forEach((p,i)=>i ? ctx.lineTo(X(p.x),Y(p.y)) : ctx.moveTo(X(p.x),Y(p.y)));
+      ctx.closePath();
+      ctx.fillStyle='rgba(221,213,197,0.48)';
+      ctx.fill();
+      ctx.clip();
+
+      // Fine diagonal hatching, like the reference image.
+      const xs = hull.map(p=>X(p.x)), ys=hull.map(p=>Y(p.y));
+      const minX=Math.min(...xs)-30, maxX=Math.max(...xs)+30;
+      const minY=Math.min(...ys)-30, maxY=Math.max(...ys)+30;
+      ctx.strokeStyle='rgba(90,80,64,0.20)';
+      ctx.lineWidth=0.7;
+      const span=(maxX-minX)+(maxY-minY);
+      for(let k=-span;k<span;k+=7){
+        ctx.beginPath();
+        ctx.moveTo(minX+k,minY);
+        ctx.lineTo(minX+k+span,maxY);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      ctx.save();
+      ctx.beginPath();
+      hull.forEach((p,i)=>i ? ctx.lineTo(X(p.x),Y(p.y)) : ctx.moveTo(X(p.x),Y(p.y)));
+      ctx.closePath();
+      ctx.strokeStyle='rgba(90,80,64,0.28)';
+      ctx.lineWidth=1;
+      ctx.stroke();
+      ctx.restore();
     }
 
     function drawSimplexIterationGraph(canvasId, constraints, step, obj, choice, isFinal) {
@@ -1865,53 +1925,102 @@
       const dpr=window.devicePixelRatio||1;
       canvas.width=W*dpr; canvas.height=H*dpr; canvas.style.width=W+'px'; canvas.style.height=H+'px';
       const ctx=canvas.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+
       const verts=getGraphVertices(constraints), point=simplexPointFromStep(step);
       const all=[...verts]; if(point)all.push(point); all.push({x:0,y:0});
-      constraints.forEach(c=>{if(Math.abs(c[0])>1e-10)all.push({x:c[2]/c[0],y:0});if(Math.abs(c[1])>1e-10)all.push({x:0,y:c[2]/c[1]});});
+      constraints.forEach(c=>{
+        if(Math.abs(c[0])>1e-10)all.push({x:c[2]/c[0],y:0});
+        if(Math.abs(c[1])>1e-10)all.push({x:0,y:c[2]/c[1]});
+      });
       const finite=all.filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)&&p.x>=-1e-8&&p.y>=-1e-8);
-      let maxX=Math.max(5,...finite.map(p=>p.x)),maxY=Math.max(5,...finite.map(p=>p.y));maxX*=1.22;maxY*=1.22;
-      const pad={l:58,r:25,t:28,b:48},pw=W-pad.l-pad.r,ph=H-pad.t-pad.b;
+      const rawX=Math.max(5,...finite.map(p=>p.x)), rawY=Math.max(5,...finite.map(p=>p.y));
+      const stepX=niceGraphStep(rawX), stepY=niceGraphStep(rawY);
+      const maxX=Math.max(stepX*3,Math.ceil(rawX/stepX)*stepX+stepX);
+      const maxY=Math.max(stepY*3,Math.ceil(rawY/stepY)*stepY+stepY);
+      const pad={l:58,r:25,t:34,b:50},pw=W-pad.l-pad.r,ph=H-pad.t-pad.b;
       const X=x=>pad.l+(x/maxX)*pw,Y=y=>pad.t+ph-(y/maxY)*ph;
+
       ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
 
-      // Grid
-      ctx.strokeStyle='rgba(26,39,68,0.07)';ctx.lineWidth=1;
-      for(let i=0;i<=8;i++){const gx=X(i*maxX/8),gy=Y(i*maxY/8);ctx.beginPath();ctx.moveTo(gx,pad.t);ctx.lineTo(gx,pad.t+ph);ctx.stroke();ctx.beginPath();ctx.moveTo(pad.l,gy);ctx.lineTo(pad.l+pw,gy);ctx.stroke();}
+      // Grid and numeric ticks.
+      ctx.strokeStyle='rgba(26,39,68,0.055)';ctx.lineWidth=1;
+      for(let x=0;x<=maxX+1e-9;x+=stepX){const gx=X(x);ctx.beginPath();ctx.moveTo(gx,pad.t);ctx.lineTo(gx,pad.t+ph);ctx.stroke();}
+      for(let y=0;y<=maxY+1e-9;y+=stepY){const gy=Y(y);ctx.beginPath();ctx.moveTo(pad.l,gy);ctx.lineTo(pad.l+pw,gy);ctx.stroke();}
 
-      // Feasible region
-      const hull=graphHull(verts);
-      if(hull.length>=3){ctx.beginPath();hull.forEach((p,i)=>i?ctx.lineTo(X(p.x),Y(p.y)):ctx.moveTo(X(p.x),Y(p.y)));ctx.closePath();ctx.fillStyle='rgba(42,122,78,0.16)';ctx.fill();}
+      // Feasible region: cream fill + diagonal hatch.
+      drawHatchedRegion(ctx,graphHull(verts),X,Y);
 
-      // Constraint lines + labels
+      // Constraint boundaries use distinct colours so every line is identifiable.
+      const lineColours=['#1657c8','#d83a2e','#2b8a3e','#7b4ab5','#d28b20','#168a8a'];
       constraints.forEach((c,i)=>{
-        const pts=graphLineSegment(c[0],c[1],c[2],maxX,maxY);
-        if(pts.length===2){ctx.strokeStyle='rgba(26,39,68,0.78)';ctx.lineWidth=1.8;ctx.beginPath();ctx.moveTo(X(pts[0].x),Y(pts[0].y));ctx.lineTo(X(pts[1].x),Y(pts[1].y));ctx.stroke();
-          const m={x:(pts[0].x+pts[1].x)/2,y:(pts[0].y+pts[1].y)/2};ctx.fillStyle='#1a2744';ctx.font='bold 10px Lato,sans-serif';ctx.fillText(graphConstraintLabel(c,i),Math.min(W-155,X(m.x)+5),Math.max(14,Y(m.y)-5));}
+        const pts=graphLineSegment(c[0],c[1],c[2],maxX,maxY); if(pts.length!==2)return;
+        ctx.strokeStyle=lineColours[i%lineColours.length];ctx.lineWidth=1.9;
+        ctx.beginPath();ctx.moveTo(X(pts[0].x),Y(pts[0].y));ctx.lineTo(X(pts[1].x),Y(pts[1].y));ctx.stroke();
+
+        const t=Math.min(0.72,Math.max(0.28,0.43+i*0.13));
+        const lx=pts[0].x+(pts[1].x-pts[0].x)*t;
+        const ly=pts[0].y+(pts[1].y-pts[0].y)*t;
+        ctx.fillStyle=lineColours[i%lineColours.length];ctx.font='bold 10px Lato,sans-serif';
+        ctx.textAlign='left';
+        ctx.fillText(graphConstraintLabel(c),Math.min(W-165,X(lx)+5),Math.max(16,Y(ly)-5));
       });
 
-      // Objective contour through the current BFS (visualises the objective function).
+      // Objective contour through the current BFS.
       if(point && obj && obj.length>=2 && (Math.abs(obj[0])>1e-10||Math.abs(obj[1])>1e-10)){
-        const z=obj[0]*point.x+obj[1]*point.y, pts=graphLineSegment(obj[0],obj[1],z,maxX,maxY);
-        if(pts.length===2){ctx.strokeStyle='rgba(184,50,50,0.78)';ctx.lineWidth=1.7;ctx.setLineDash([7,5]);ctx.beginPath();ctx.moveTo(X(pts[0].x),Y(pts[0].y));ctx.lineTo(X(pts[1].x),Y(pts[1].y));ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='#b83232';ctx.font='bold 10px Lato,sans-serif';ctx.fillText(`Z=${fmtGraphCoord(z)}`,Math.min(W-55,X(pts[1].x)-40),Math.max(14,Y(pts[1].y)-6));}
+        const z=obj[0]*point.x+obj[1]*point.y;
+        const pts=graphLineSegment(obj[0],obj[1],z,maxX,maxY);
+        if(pts.length===2){
+          ctx.strokeStyle='#7b3fb3';ctx.lineWidth=1.8;ctx.setLineDash([7,5]);
+          ctx.beginPath();ctx.moveTo(X(pts[0].x),Y(pts[0].y));ctx.lineTo(X(pts[1].x),Y(pts[1].y));ctx.stroke();ctx.setLineDash([]);
+          const q=pts[0].x>pts[1].x?pts[0]:pts[1];
+          ctx.fillStyle='#7b3fb3';ctx.font='bold 10px Lato,sans-serif';
+          ctx.fillText(graphObjectiveLabel(obj,choice,z),Math.min(W-215,X(q.x)-90),Math.max(18,Y(q.y)-7));
+        }
       }
 
-      // Axes with arrowheads
-      ctx.strokeStyle='#1a2744';ctx.fillStyle='#1a2744';ctx.lineWidth=1.7;
-      ctx.beginPath();ctx.moveTo(X(0),Y(0));ctx.lineTo(X(0),pad.t+2);ctx.stroke();drawGraphArrow(ctx,X(0),pad.t+9,X(0),pad.t+1,6);
-      ctx.beginPath();ctx.moveTo(X(0),Y(0));ctx.lineTo(pad.l+pw-2,Y(0));ctx.stroke();drawGraphArrow(ctx,pad.l+pw-10,Y(0),pad.l+pw-1,Y(0),6);
-      ctx.font='bold 12px Lato,sans-serif';ctx.fillText('x₁',W-28,Y(0)+22);ctx.fillText('x₂',X(0)-28,18);
+      // Axes.
+      ctx.strokeStyle='#111';ctx.fillStyle='#111';ctx.lineWidth=1.7;
+      ctx.beginPath();ctx.moveTo(X(0),Y(0));ctx.lineTo(X(0),pad.t+3);ctx.stroke();drawGraphArrow(ctx,X(0),pad.t+10,X(0),pad.t+2,7);
+      ctx.beginPath();ctx.moveTo(X(0),Y(0));ctx.lineTo(pad.l+pw-2,Y(0));ctx.stroke();drawGraphArrow(ctx,pad.l+pw-10,Y(0),pad.l+pw-1,Y(0),7);
+      ctx.font='bold 13px Lato,sans-serif';ctx.textAlign='left';ctx.fillText('x₁',W-30,Y(0)+24);ctx.fillText('x₂',X(0)-27,18);
 
-      // Tick labels
-      ctx.font='9px Lato,sans-serif';ctx.fillStyle='rgba(26,39,68,0.62)';ctx.textAlign='center';
-      for(let i=1;i<=5;i++){const vx=i*maxX/5,vy=i*maxY/5;ctx.fillText(fmtGraphCoord(vx),X(vx),Y(0)+15);ctx.textAlign='right';ctx.fillText(fmtGraphCoord(vy),X(0)-6,Y(vy)+3);ctx.textAlign='center';}
+      // Ticks at clean integer values.
+      ctx.font='9px Lato,sans-serif';ctx.fillStyle='rgba(26,39,68,0.72)';
+      ctx.textAlign='center';
+      for(let x=stepX;x<maxX-1e-9;x+=stepX)ctx.fillText(fmtGraphCoord(x),X(x),Y(0)+15);
+      ctx.textAlign='right';
+      for(let y=stepY;y<maxY-1e-9;y+=stepY)ctx.fillText(fmtGraphCoord(y),X(0)-6,Y(y)+3);
 
-      // Feasible vertices
-      ctx.fillStyle='#5d6470';verts.forEach(p=>{ctx.beginPath();ctx.arc(X(p.x),Y(p.y),3,0,Math.PI*2);ctx.fill();});
+      // Feasible vertices.
+      verts.forEach(p=>{
+        ctx.fillStyle='#111';ctx.beginPath();ctx.arc(X(p.x),Y(p.y),3.5,0,Math.PI*2);ctx.fill();
+        ctx.font='10px Lato,sans-serif';ctx.textAlign='left';
+        const dx=(X(p.x)>W-100)?-72:7;
+        ctx.fillText('('+fmtGraphCoord(p.x)+', '+fmtGraphCoord(p.y)+')',X(p.x)+dx,Math.max(16,Y(p.y)-7));
+      });
 
-      // Current BFS coordinate
+      // Current BFS / optimal point.
       if(point&&Number.isFinite(point.x)&&Number.isFinite(point.y)){
-        const px=Math.max(0,point.x),py=Math.max(0,point.y);ctx.fillStyle=isFinal?'#b8922a':'#b83232';ctx.beginPath();ctx.arc(X(px),Y(py),7,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
-        ctx.fillStyle='#1a2744';ctx.font='bold 11px Lato,sans-serif';const label=(isFinal?'OPTIMAL':'CURRENT BFS')+' ('+fmtGraphCoord(px)+', '+fmtGraphCoord(py)+')';ctx.fillText(label,Math.min(W-175,X(px)+10),Math.max(16,Y(py)-10));
+        const px=Math.max(0,point.x),py=Math.max(0,point.y);
+        ctx.fillStyle='#e22f25';ctx.beginPath();ctx.arc(X(px),Y(py),7,0,Math.PI*2);ctx.fill();
+        ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
+        ctx.fillStyle='#d32620';ctx.font='bold 11px Lato,sans-serif';ctx.textAlign='left';
+        const label=isFinal?'Optimal Point':'Current BFS';
+        ctx.fillText(label+' ('+fmtGraphCoord(px)+', '+fmtGraphCoord(py)+')',Math.min(W-150,X(px)+9),Math.max(17,Y(py)-10));
+      }
+
+      // Legend: compact for iteration graphs, fuller for the final graph.
+      const legendX=W-190, legendY=42;
+      const legendH=isFinal ? 78 : 48;
+      ctx.fillStyle='rgba(255,255,255,0.94)';ctx.strokeStyle='rgba(26,39,68,0.22)';ctx.lineWidth=1;
+      ctx.fillRect(legendX,legendY,175,legendH);ctx.strokeRect(legendX,legendY,175,legendH);
+      ctx.fillStyle='#e22f25';ctx.beginPath();ctx.arc(legendX+12,legendY+13,4,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#222';ctx.font='9px Lato,sans-serif';ctx.textAlign='left';ctx.fillText(isFinal?'Optimal Point':'Current BFS',legendX+22,legendY+16);
+      ctx.strokeStyle='#7b3fb3';ctx.setLineDash([5,4]);ctx.beginPath();ctx.moveTo(legendX+7,legendY+29);ctx.lineTo(legendX+24,legendY+29);ctx.stroke();ctx.setLineDash([]);ctx.fillText('Objective function',legendX+30,legendY+32);
+      if(isFinal){
+        ctx.fillStyle='rgba(221,213,197,0.85)';ctx.fillRect(legendX+7,legendY+42,17,10);ctx.fillStyle='#222';ctx.fillText('Feasible region',legendX+30,legendY+51);
+        const lc=['#1657c8','#d83a2e','#2b8a3e'];
+        constraints.slice(0,3).forEach((c,i)=>{ctx.strokeStyle=lc[i];ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(legendX+88,legendY+42+i*11);ctx.lineTo(legendX+104,legendY+42+i*11);ctx.stroke();ctx.fillStyle='#222';ctx.fillText('C'+(i+1),legendX+109,legendY+45+i*11);});
       }
     }
 
@@ -1923,65 +2032,8 @@
 
     // ── Separate final graph: emphasize the feasible region and final result ──
     function drawFinalResultGraph(canvasId, constraints, result, obj, choice) {
-      const canvas=document.getElementById(canvasId); if(!canvas)return;
-      const W=Math.min(canvas.parentElement.clientWidth-20,680),H=W,dpr=window.devicePixelRatio||1;
-      canvas.width=W*dpr;canvas.height=H*dpr;canvas.style.width=W+'px';canvas.style.height=H+'px';
-      const ctx=canvas.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);
-      const verts=getGraphVertices(constraints), finalStep=getFinalOptimalStep(result);
-      const point=finalStep?simplexPointFromStep(finalStep):(result.solution?{x:toGraphNum(result.solution.vars[0]?.value),y:toGraphNum(result.solution.vars[1]?.value)}:null);
-      const all=[...verts];if(point)all.push(point);all.push({x:0,y:0});
-      constraints.forEach(c=>{if(Math.abs(c[0])>1e-10)all.push({x:c[2]/c[0],y:0});if(Math.abs(c[1])>1e-10)all.push({x:0,y:c[2]/c[1]});});
-      const finite=all.filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)&&p.x>=-1e-8&&p.y>=-1e-8);
-      let maxX=Math.max(5,...finite.map(p=>p.x)),maxY=Math.max(5,...finite.map(p=>p.y));maxX*=1.28;maxY*=1.28;
-      const pad={l:66,r:28,t:38,b:58},pw=W-pad.l-pad.r,ph=H-pad.t-pad.b,X=x=>pad.l+(x/maxX)*pw,Y=y=>pad.t+ph-(y/maxY)*ph;
-      ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
-
-      // Light coordinate grid
-      ctx.strokeStyle='rgba(26,39,68,0.07)';ctx.lineWidth=1;
-      for(let i=0;i<=10;i++){const gx=X(i*maxX/10),gy=Y(i*maxY/10);ctx.beginPath();ctx.moveTo(gx,pad.t);ctx.lineTo(gx,pad.t+ph);ctx.stroke();ctx.beginPath();ctx.moveTo(pad.l,gy);ctx.lineTo(pad.l+pw,gy);ctx.stroke();}
-
-      // Feasible region — the intersection of all constraint half-planes, represented by its feasible vertices.
-      const hull=graphHull(verts);
-      if(hull.length>=3){ctx.beginPath();hull.forEach((p,i)=>i?ctx.lineTo(X(p.x),Y(p.y)):ctx.moveTo(X(p.x),Y(p.y)));ctx.closePath();ctx.fillStyle='rgba(42,122,78,0.22)';ctx.fill();ctx.strokeStyle='rgba(42,122,78,0.55)';ctx.lineWidth=1.5;ctx.stroke();}
-
-      // Constraint boundary lines.
-      constraints.forEach((c,i)=>{
-        const pts=graphLineSegment(c[0],c[1],c[2],maxX,maxY);if(pts.length!==2)return;
-        ctx.strokeStyle='#1a2744';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(X(pts[0].x),Y(pts[0].y));ctx.lineTo(X(pts[1].x),Y(pts[1].y));ctx.stroke();
-        const m={x:(pts[0].x+pts[1].x)/2,y:(pts[0].y+pts[1].y)/2};
-        ctx.fillStyle='#1a2744';ctx.font='bold 10px Lato,sans-serif';ctx.fillText(graphConstraintLabel(c,i),Math.min(W-175,X(m.x)+6),Math.max(16,Y(m.y)-6));
-      });
-
-      // Objective-function line through the optimum.
-      if(point&&obj&&obj.length>=2&&(Math.abs(obj[0])>1e-10||Math.abs(obj[1])>1e-10)){
-        const z=obj[0]*point.x+obj[1]*point.y,pts=graphLineSegment(obj[0],obj[1],z,maxX,maxY);
-        if(pts.length===2){ctx.strokeStyle='#b83232';ctx.lineWidth=2.2;ctx.setLineDash([9,6]);ctx.beginPath();ctx.moveTo(X(pts[0].x),Y(pts[0].y));ctx.lineTo(X(pts[1].x),Y(pts[1].y));ctx.stroke();ctx.setLineDash([]);
-          const q=pts[0].x>pts[1].x?pts[0]:pts[1];ctx.fillStyle='#b83232';ctx.font='bold 11px Lato,sans-serif';ctx.fillText(graphObjectiveLabel(obj,choice),Math.min(W-180,X(q.x)-80),Math.max(18,Y(q.y)-8));
-        }
-      }
-
-      // Axes with arrowheads.
-      ctx.strokeStyle='#1a2744';ctx.fillStyle='#1a2744';ctx.lineWidth=1.8;
-      ctx.beginPath();ctx.moveTo(X(0),Y(0));ctx.lineTo(X(0),pad.t+4);ctx.stroke();drawGraphArrow(ctx,X(0),pad.t+12,X(0),pad.t+2,7);
-      ctx.beginPath();ctx.moveTo(X(0),Y(0));ctx.lineTo(pad.l+pw-3,Y(0));ctx.stroke();drawGraphArrow(ctx,pad.l+pw-12,Y(0),pad.l+pw-2,Y(0),7);
-      ctx.font='bold 14px Lato,sans-serif';ctx.fillText('x₁',W-31,Y(0)+27);ctx.fillText('x₂',X(0)-31,20);
-
-      // Tick labels.
-      ctx.font='10px Lato,sans-serif';ctx.fillStyle='rgba(26,39,68,0.62)';ctx.textAlign='center';
-      for(let i=1;i<=8;i++){const vx=i*maxX/8,vy=i*maxY/8;ctx.fillText(fmtGraphCoord(vx),X(vx),Y(0)+17);ctx.textAlign='right';ctx.fillText(fmtGraphCoord(vy),X(0)-7,Y(vy)+3);ctx.textAlign='center';}
-
-      // Label every feasible vertex with its coordinate.
-      verts.forEach(p=>{ctx.fillStyle='#1a2744';ctx.beginPath();ctx.arc(X(p.x),Y(p.y),4,0,Math.PI*2);ctx.fill();ctx.font='10px Lato,sans-serif';ctx.fillText('('+fmtGraphCoord(p.x)+', '+fmtGraphCoord(p.y)+')',Math.min(W-95,X(p.x)+7),Math.max(15,Y(p.y)-7));});
-
-      if(point&&Number.isFinite(point.x)&&Number.isFinite(point.y)){
-        const px=Math.max(0,point.x),py=Math.max(0,point.y);ctx.fillStyle='#b8922a';ctx.beginPath();ctx.arc(X(px),Y(py),9,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2.5;ctx.stroke();
-        ctx.fillStyle='#1a2744';ctx.font='bold 12px Lato,sans-serif';ctx.fillText('OPTIMAL ('+fmtGraphCoord(px)+', '+fmtGraphCoord(py)+')',Math.min(W-195,X(px)+12),Math.max(18,Y(py)-12));
-      }
-
-      // Legend.
-      const ly=H-17;ctx.font='10px Lato,sans-serif';ctx.textAlign='left';ctx.fillStyle='rgba(42,122,78,0.22)';ctx.fillRect(12,ly-9,17,10);ctx.fillStyle='#1a2744';ctx.fillText('Feasible region',35,ly);
-      ctx.strokeStyle='#1a2744';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(132,ly-4);ctx.lineTo(152,ly-4);ctx.stroke();ctx.fillStyle='#1a2744';ctx.fillText('Constraints',158,ly);
-      ctx.strokeStyle='#b83232';ctx.setLineDash([6,4]);ctx.beginPath();ctx.moveTo(225,ly-4);ctx.lineTo(245,ly-4);ctx.stroke();ctx.setLineDash([]);ctx.fillText('Objective function',251,ly);
+      const finalStep=getFinalOptimalStep(result);
+      drawSimplexIterationGraph(canvasId,constraints,finalStep||null,obj,choice,true);
     }
 
     function renderResults(result, choice, numVars, method, obj, constraints, signs, rhs, varSigns) {
@@ -2054,7 +2106,7 @@
           block.innerHTML += renderTableau(step.tableau, step.basics, step.colNames, step.pivotCol, step.pivotRow, step.ratios, step.type === 'optimal');
           if (numVars === 2 && varSigns[0] === 'pos' && varSigns[1] === 'pos') {
             const graphId = `simplexGraph_${stepIdx}`;
-            block.innerHTML += `<div class="iteration-graph-panel"><div class="iteration-graph-title">${step.type === 'optimal' ? 'Graph — Final Basic Feasible Solution' : 'Graph — Current Basic Feasible Solution'}</div><canvas id="${graphId}" class="iteration-graph-canvas"></canvas><div class="iteration-graph-note">The highlighted point is the basic feasible solution represented by this tableau.</div></div>`;
+            block.innerHTML += `<div class="iteration-graph-panel"><div class="iteration-graph-title">GRAPH (${step.type === 'optimal' ? 'Iteration ' + step.iteration + ' — Optimal' : 'Iteration ' + step.iteration})</div><canvas id="${graphId}" class="iteration-graph-canvas"></canvas><div class="iteration-graph-note">The highlighted point is the basic feasible solution represented by this tableau.</div></div>`;
             setTimeout(() => drawSimplexIterationGraph(graphId, constraints, step, obj, choice, step.type === 'optimal'), 20);
           }
         }
